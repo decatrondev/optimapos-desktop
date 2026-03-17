@@ -266,8 +266,16 @@ export const App: React.FC = () => {
         );
     }
 
-    // ── Step 3: Location picker (if 2+ locations and none selected) ──
-    if (locations.length > 1 && !appConfig?.locationId) {
+    // ── Step 3: Validate saved location against user's allowed locations ──
+    const savedLocValid = appConfig?.locationId && locations.some(l => l.id === appConfig.locationId);
+
+    // If saved locationId is NOT in user's locations, clear it
+    if (appConfig?.locationId && locations.length > 0 && !savedLocValid) {
+        setAppConfig({ locationId: undefined as any, locationName: undefined as any });
+    }
+
+    // Show picker if 2+ locations and none selected (or invalid)
+    if (locations.length > 1 && !savedLocValid) {
         return (
             <LocationPicker
                 locations={locations}
@@ -279,8 +287,8 @@ export const App: React.FC = () => {
         );
     }
 
-    // Auto-select if only 1 location and none saved
-    if (locations.length === 1 && !appConfig?.locationId) {
+    // Auto-select if only 1 location
+    if (locations.length === 1 && !savedLocValid) {
         setAppConfig({ locationId: locations[0].id, locationName: locations[0].name });
     }
 
