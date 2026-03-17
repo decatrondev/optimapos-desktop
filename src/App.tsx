@@ -6,7 +6,7 @@ import { OrderQueue } from './components/OrderQueue';
 import { AlertOverlay } from './components/AlertOverlay';
 import { LoginScreen } from './components/LoginScreen';
 import { PrinterSetup } from './components/PrinterSetup';
-import { TicketPreview } from './components/TicketPreview';
+import { TicketPreview, PrintJobPreview } from './components/TicketPreview';
 import { ServerSetup } from './components/ServerSetup';
 import { LocationPicker } from './components/LocationPicker';
 import { Order, Location } from './types/order';
@@ -39,6 +39,7 @@ const KitchenDashboard: React.FC<{
     const [initialOrders, setInitialOrders] = useState<Order[]>([]);
     const [rules, setRules] = useState<PrintRule[]>([]);
     const [ticketPreview, setTicketPreview] = useState<{ order: Order; template: TicketTemplate } | null>(null);
+    const [activePrintJob, setActivePrintJob] = useState<PrintJob | null>(null);
 
     // Desktop socket auth (API key based)
     useEffect(() => {
@@ -74,16 +75,22 @@ const KitchenDashboard: React.FC<{
         }).catch(e => console.error('[PrintConfig] Load failed:', e));
     }, [token, canReadOrders]);
 
-    // Process auto-print jobs
+    // Process print jobs: auto-print ones get acknowledged, manual ones show preview
     useEffect(() => {
         for (const job of printJobs) {
             if (job.rule.autoPrint) {
-                console.log(`[AutoPrint] Processing: ${job.jobId} | ${job.event} → ${job.printer.name}`);
-                // For now, log and acknowledge. Real ESC/POS printing comes in Phase 2.
+                console.log(`[AutoPrint] Acknowledging: ${job.jobId} | ${job.event} → ${job.printer.name}`);
                 clearPrintJob(job.jobId);
             }
         }
-    }, [printJobs, clearPrintJob]);
+        // Show first non-autoPrint job as preview if nothing is showing
+        if (!activePrintJob) {
+            const manualJob = printJobs.find(j => !j.rule.autoPrint);
+            if (manualJob) {
+                setActivePrintJob(manualJob);
+            }
+        }
+    }, [printJobs, clearPrintJob, activePrintJob]);
 
     // Merge socket + initial orders (no dupes)
     const mergedOrders = [...orders];
@@ -182,6 +189,22 @@ const KitchenDashboard: React.FC<{
                     storeName={storeName}
                     onClose={() => setTicketPreview(null)}
                     onPrint={handleTicketPrint}
+                />
+            )}
+
+            {activePrintJob && (
+                <PrintJobPreview
+                    job={activePrintJob}
+                    serverUrl={serverUrl}
+                    onClose={() => {
+                        clearPrintJob(activePrintJob.jobId);
+                        setActivePrintJob(null);
+                    }}
+                    onPrint={() => {
+                        console.log(`[Print] Manual print for job: ${activePrintJob.jobId}`);
+                        clearPrintJob(activePrintJob.jobId);
+                        setActivePrintJob(null);
+                    }}
                 />
             )}
         </div>
