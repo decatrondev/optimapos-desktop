@@ -175,6 +175,14 @@ body::before {
   padding-left: 16px;
 }
 
+.status-bar__subtitle--clickable {
+  cursor: pointer;
+  transition: color 0.2s;
+}
+.status-bar__subtitle--clickable:hover {
+  color: var(--primary);
+}
+
 .status-bar__center {
   position: absolute;
   left: 50%;

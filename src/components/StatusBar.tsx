@@ -10,6 +10,8 @@ interface StatusBarProps {
     user: AuthUser | null;
     onLogout?: () => void;
     onSettings?: () => void;
+    onChangeLocation?: () => void;
+    canChangeLocation?: boolean;
 }
 
 function getRoleBadge(role: string): { label: string; className: string } {
@@ -24,7 +26,7 @@ function getRoleBadge(role: string): { label: string; className: string } {
 }
 
 export const StatusBar: React.FC<StatusBarProps> = ({
-    storeName, locationName, isConnected, orderCount, user, onLogout, onSettings,
+    storeName, locationName, isConnected, orderCount, user, onLogout, onSettings, onChangeLocation, canChangeLocation,
 }) => {
     const time = useClock();
     const roleBadge = user ? getRoleBadge(user.role) : null;
@@ -37,7 +39,13 @@ export const StatusBar: React.FC<StatusBarProps> = ({
                     <div>
                         <h1 className="status-bar__title">{storeName}</h1>
                         {locationName && (
-                            <span className="status-bar__subtitle">📍 {locationName}</span>
+                            <span
+                                className={`status-bar__subtitle ${canChangeLocation ? 'status-bar__subtitle--clickable' : ''}`}
+                                onClick={canChangeLocation ? onChangeLocation : undefined}
+                                title={canChangeLocation ? 'Cambiar local' : undefined}
+                            >
+                                📍 {locationName} {canChangeLocation ? '▾' : ''}
+                            </span>
                         )}
                     </div>
                 </div>

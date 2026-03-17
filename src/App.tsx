@@ -26,7 +26,9 @@ const CURRENCY_SYMBOL = 'S/';
 const KitchenDashboard: React.FC<{
     printerId: number;
     onResetPrinter: () => void;
-}> = ({ printerId, onResetPrinter }) => {
+    onChangeLocation?: () => void;
+    canChangeLocation?: boolean;
+}> = ({ printerId, onResetPrinter, onChangeLocation, canChangeLocation }) => {
     const { user, token, logout, hasPermission, appConfig } = useAuth();
     const canReadOrders = hasPermission('orders', 'read');
     const canWriteOrders = hasPermission('orders', 'write');
@@ -152,6 +154,8 @@ const KitchenDashboard: React.FC<{
                 user={user}
                 onLogout={logout}
                 onSettings={onResetPrinter}
+                onChangeLocation={onChangeLocation}
+                canChangeLocation={canChangeLocation}
             />
 
             {!canReadOrders ? (
@@ -298,6 +302,10 @@ export const App: React.FC = () => {
             onResetPrinter={() => {
                 setPrinterId(null);
                 import('./services/printer-config.service').then(m => m.storePrinterId(null));
+            }}
+            canChangeLocation={locations.length > 1}
+            onChangeLocation={() => {
+                setAppConfig({ locationId: undefined as any, locationName: undefined as any });
             }}
         />
     );
