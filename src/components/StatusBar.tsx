@@ -4,24 +4,28 @@ import { AuthUser } from '../types/order';
 
 interface StatusBarProps {
     storeName: string;
+    locationName?: string | null;
     isConnected: boolean;
     orderCount: number;
     user: AuthUser | null;
     onLogout?: () => void;
+    onSettings?: () => void;
 }
 
 function getRoleBadge(role: string): { label: string; className: string } {
     switch (role) {
-        case 'ADMIN':
-            return { label: 'Admin', className: 'role-badge--admin' };
-        case 'VENDOR':
-            return { label: 'Staff', className: 'role-badge--vendor' };
-        default:
-            return { label: role, className: '' };
+        case 'ADMIN': return { label: 'Admin', className: 'role-badge--admin' };
+        case 'MANAGER': return { label: 'Manager', className: 'role-badge--admin' };
+        case 'VENDOR': return { label: 'Cajero', className: 'role-badge--vendor' };
+        case 'KITCHEN': return { label: 'Cocina', className: 'role-badge--kitchen' };
+        case 'DELIVERY': return { label: 'Delivery', className: 'role-badge--delivery' };
+        default: return { label: role, className: '' };
     }
 }
 
-export const StatusBar: React.FC<StatusBarProps> = ({ storeName, isConnected, orderCount, user, onLogout }) => {
+export const StatusBar: React.FC<StatusBarProps> = ({
+    storeName, locationName, isConnected, orderCount, user, onLogout, onSettings,
+}) => {
     const time = useClock();
     const roleBadge = user ? getRoleBadge(user.role) : null;
 
@@ -29,10 +33,14 @@ export const StatusBar: React.FC<StatusBarProps> = ({ storeName, isConnected, or
         <header className="status-bar">
             <div className="status-bar__left">
                 <div className="status-bar__logo">
-                    <span className="status-bar__logo-icon">🍔</span>
-                    <h1 className="status-bar__title">{storeName}</h1>
+                    <span className="status-bar__logo-icon">⚡</span>
+                    <div>
+                        <h1 className="status-bar__title">{storeName}</h1>
+                        {locationName && (
+                            <span className="status-bar__subtitle">📍 {locationName}</span>
+                        )}
+                    </div>
                 </div>
-                <span className="status-bar__subtitle">Terminal de Cocina</span>
             </div>
 
             <div className="status-bar__center">
@@ -47,6 +55,11 @@ export const StatusBar: React.FC<StatusBarProps> = ({ storeName, isConnected, or
                             <span className={`status-bar__role-badge ${roleBadge.className}`}>
                                 {roleBadge.label}
                             </span>
+                        )}
+                        {onSettings && (
+                            <button className="btn btn--logout" onClick={onSettings} title="Configuración">
+                                ⚙️
+                            </button>
                         )}
                         {onLogout && (
                             <button className="btn btn--logout" onClick={onLogout} title="Cerrar sesión">
@@ -64,7 +77,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({ storeName, isConnected, or
                 <div className={`status-bar__connection ${isConnected ? 'connected' : 'disconnected'}`}>
                     <span className="status-bar__connection-dot" />
                     <span className="status-bar__connection-text">
-                        {isConnected ? 'Conectado' : 'Desconectado'}
+                        {isConnected ? 'Conectado' : 'Sin conexión'}
                     </span>
                 </div>
             </div>

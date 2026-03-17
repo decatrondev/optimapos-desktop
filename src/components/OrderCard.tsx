@@ -6,7 +6,7 @@ interface OrderCardProps {
     order: Order;
     currencySymbol: string;
     storeName: string;
-    onAdvanceStatus?: (orderId: number, orderType: 'DELIVERY' | 'PICKUP') => Promise<void>;
+    onAdvanceStatus?: (orderId: number, orderType: string) => Promise<void>;
     onRemove: (orderId: number) => void;
     onPrint?: (order: Order) => void;
     isNew?: boolean;
@@ -64,7 +64,7 @@ export const OrderCard: React.FC<OrderCardProps> = ({ order, currencySymbol, sto
                 <div className="order-card__header-left">
                     <span className="order-card__code">#{order.code}</span>
                     <span className={`order-card__type order-card__type--${order.type.toLowerCase()}`}>
-                        {order.type === 'DELIVERY' ? '🛵 Delivery' : '🏪 Recojo'}
+                        {order.type === 'DELIVERY' ? '🛵 Delivery' : order.type === 'DINE_IN' ? '🍽️ Mesa' : '🏪 Recojo'}
                     </span>
                 </div>
                 <div className="order-card__header-right">

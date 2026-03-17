@@ -1,31 +1,38 @@
-// ─── Printer Config Types (KDS 2.0 — Template V2) ────────────────────────────
+// ─── Printer Config Types (V2 — matches backend Phase 6) ─────────────────────
 
 export interface Printer {
     id: number;
     name: string;
-    type: 'NETWORK' | 'USB';
+    type: 'NETWORK' | 'USB' | 'BLUETOOTH';
     address: string;
+    port: number;
     isActive: boolean;
-    createdAt: string;
-    updatedAt: string;
+    isDefault: boolean;
+    locationId: number | null;
+    locationName: string | null;
 }
 
 export interface PrintRule {
     id: number;
     name: string;
     printerId: number;
+    printerName: string;
+    printerType: string;
+    printerAddress: string;
+    printerPort: number;
     templateId: number;
     events: string[];
-    conditions: PrintRuleConditions | null;
+    orderTypes: string[];
+    copies: number;
+    autoPrint: boolean;
     isActive: boolean;
-    printer?: { id: number; name: string };
-    template?: { id: number; name: string };
-}
-
-export interface PrintRuleConditions {
-    type?: 'DELIVERY' | 'PICKUP';
-    categories?: number[];
-    [key: string]: unknown;
+    template: {
+        id: number;
+        name: string;
+        width: 58 | 80;
+        content: any;
+        category: string | null;
+    };
 }
 
 export interface TicketTemplate {
@@ -33,99 +40,135 @@ export interface TicketTemplate {
     name: string;
     width: 58 | 80;
     isDefault: boolean;
+    category: string | null;
     content: {
         elements: TemplateElement[];
     };
-    createdAt: string;
-    updatedAt: string;
 }
 
-// ─── Base Element (shared by ALL elements) ────────────────────────────────────
+/** Desktop config response from GET /desktop/config */
+export interface DesktopConfig {
+    tenant: {
+        id: number;
+        name: string;
+        slug: string;
+        ruc: string | null;
+    };
+    locations: Array<{ id: number; name: string; address: string | null }>;
+    printers: Printer[];
+    rules: PrintRule[];
+    templates: TicketTemplate[];
+}
+
+/** Print job received via WebSocket */
+export interface PrintJob {
+    jobId: string;
+    event: string;
+    rule: {
+        id: number;
+        name: string;
+        copies: number;
+        autoPrint: boolean;
+    };
+    printer: {
+        id: number;
+        name: string;
+        type: string;
+        address: string;
+        port: number;
+    };
+    template: {
+        id: number;
+        name: string;
+        width: number;
+        content: any;
+    };
+    data: Record<string, any>;
+    timestamp: string;
+}
+
+// ─── Template Elements ───────────────────────────────────────────────────────
 
 interface BaseElement {
     id: string;
     type: string;
-
-    // Font & Alignment
-    align?: 'left' | 'center' | 'right';  // Default: 'left'
-    font?: 'A' | 'B';                      // Default: 'A'
-
-    // Text modifiers
-    bold?: boolean;       // Default: false
-    underline?: boolean;  // Default: false
-    invert?: boolean;     // Default: false (white on black)
-
-    // Scale (character size multiplier, 1-4)
-    scaleW?: 1 | 2 | 3 | 4;  // Width  (Default: 1)
-    scaleH?: 1 | 2 | 3 | 4;  // Height (Default: 1)
+    align?: 'left' | 'center' | 'right';
+    font?: 'A' | 'B';
+    bold?: boolean;
+    underline?: boolean;
+    invert?: boolean;
+    scaleW?: 1 | 2 | 3 | 4;
+    scaleH?: 1 | 2 | 3 | 4;
 }
 
-// ─── Element Types ────────────────────────────────────────────────────────────
-
-/** Title text (e.g. store name) */
 export interface HeaderElement extends BaseElement {
     type: 'header';
     content: string;
 }
 
-/** Free-form text (e.g. address, thanks message). Supports \n for multiline. */
 export interface TextElement extends BaseElement {
     type: 'text';
     content: string;
 }
 
-/** Logo or image */
 export interface ImageElement extends BaseElement {
     type: 'image';
     content: string;
-    algo?: string;
     imageSize?: number;
 }
 
-/** Logo (alias — backend sometimes sends 'logo' instead of 'image') */
 export interface LogoElement extends BaseElement {
     type: 'logo';
     content?: string;
-    algo?: string;
     imageSize?: number;
 }
 
-/** Divider line */
 export interface SeparatorElement extends BaseElement {
     type: 'separator';
-    content?: string;  // Character to repeat (default: '-')
-    char?: string;     // Alias for content
+    content?: string;
+    char?: string;
+    separatorStyle?: 'dashed' | 'solid' | 'double' | 'stars';
 }
 
-/** Dynamic order info block (order#, date, customer, table) */
+export interface SpacerElement extends BaseElement {
+    type: 'spacer';
+    spacerHeight?: number;
+}
+
+export interface CutElement extends BaseElement {
+    type: 'cut';
+    cutMode?: 'partial' | 'full';
+}
+
+export interface QrCodeElement extends BaseElement {
+    type: 'qr_code';
+    content?: string;
+    qrSize?: 'S' | 'M' | 'L';
+}
+
 export interface OrderInfoElement extends BaseElement {
     type: 'order_info';
-    showTable?: boolean;  // If true, show "MESA: X" when table exists
+    showTable?: boolean;
 }
 
-/** Product items table with optional column headers */
 export interface ItemsListElement extends BaseElement {
     type: 'items_list';
-    showPrices?: boolean;   // Default: true. false = hide price column (kitchen)
-    showAddons?: boolean;   // Default: true. false = hide addons
+    showPrices?: boolean;
+    showAddons?: boolean;
 }
 
-/** Financial totals block */
 export interface TotalsElement extends BaseElement {
     type: 'totals';
-    showSubtotal?: boolean;     // Default: true
-    showDeliveryFee?: boolean;  // Default: true
-    showDiscount?: boolean;     // Default: true
+    showSubtotal?: boolean;
+    showDeliveryFee?: boolean;
+    showDiscount?: boolean;
 }
 
-/** Barcode element */
 export interface BarcodeElement extends BaseElement {
     type: 'barcode';
-    content?: string;  // Template: "{code}" replaced with order.code
-    height?: number;   // Height in px/points (default: 50)
+    content?: string;
+    height?: number;
 }
-
-// ─── Union Type ───────────────────────────────────────────────────────────────
 
 export type TemplateElement =
     | HeaderElement
@@ -133,6 +176,9 @@ export type TemplateElement =
     | ImageElement
     | LogoElement
     | SeparatorElement
+    | SpacerElement
+    | CutElement
+    | QrCodeElement
     | OrderInfoElement
     | ItemsListElement
     | TotalsElement

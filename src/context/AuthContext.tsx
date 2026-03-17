@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { AuthUser, AuthState } from '../types/order';
-import { login as loginAPI, persistToken, getPersistedToken, validateToken, AuthError } from '../services/auth.service';
+import { AuthUser, AuthState, AppConfig, Location } from '../types/order';
+import {
+    login as loginAPI, persistToken, getPersistedToken, validateToken,
+    AuthError, fetchUserLocations,
+} from '../services/auth.service';
 
 export interface Permission {
     module: string;
@@ -14,15 +17,25 @@ interface AuthContextType extends AuthState {
     error: string | null;
     permissions: Permission[];
     hasPermission: (module: string, action: 'read' | 'write') => boolean;
+    appConfig: AppConfig | null;
+    locations: Location[];
+    setAppConfig: (updates: Partial<AppConfig>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-const API_BASE = import.meta.env.VITE_SOCKET_URL || 'https://doncarlyn.decatron.net';
+async function getServerUrl(): Promise<string> {
+    if (window.electronAPI?.getConfig) {
+        const config = await window.electronAPI.getConfig();
+        return config.serverUrl || '';
+    }
+    return import.meta.env.VITE_SOCKET_URL || '';
+}
 
 async function fetchPermissions(token: string): Promise<Permission[]> {
     try {
-        const res = await fetch(`${API_BASE}/api/users/me/permissions`, {
+        const serverUrl = await getServerUrl();
+        const res = await fetch(`${serverUrl}/api/users/me/permissions`, {
             headers: { 'Authorization': `Bearer ${token}` },
         });
         if (!res.ok) return [];
@@ -38,33 +51,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [permissions, setPermissions] = useState<Permission[]>([]);
+    const [appConfig, setAppConfigState] = useState<AppConfig | null>(null);
+    const [locations, setLocations] = useState<Location[]>([]);
 
-    // Auto-login: try to restore session from stored token
+    // Load app config + try auto-login
     useEffect(() => {
-        const restoreSession = async () => {
+        const init = async () => {
             try {
+                // Load persistent config
+                if (window.electronAPI?.getConfig) {
+                    const config = await window.electronAPI.getConfig();
+                    setAppConfigState(config);
+                }
+
+                // Try to restore session
                 const storedToken = await getPersistedToken();
                 if (storedToken) {
                     const validUser = await validateToken(storedToken);
                     if (validUser) {
                         setToken(storedToken);
                         setUser(validUser);
-                        // Load permissions
                         if (validUser.role !== 'ADMIN') {
                             const perms = await fetchPermissions(storedToken);
                             setPermissions(perms);
                         }
+                        // Fetch locations
+                        const locs = await fetchUserLocations(storedToken);
+                        setLocations(locs);
                     } else {
                         await persistToken(null);
                     }
                 }
             } catch (e) {
-                console.warn('[Auth] Session restore failed:', e);
+                console.warn('[Auth] Init failed:', e);
             } finally {
                 setIsLoading(false);
             }
         };
-        restoreSession();
+        init();
+    }, []);
+
+    const setAppConfig = useCallback(async (updates: Partial<AppConfig>) => {
+        if (window.electronAPI?.saveConfig) {
+            const updated = await window.electronAPI.saveConfig(updates);
+            setAppConfigState(updated);
+        } else {
+            // Browser fallback
+            setAppConfigState(prev => prev ? { ...prev, ...updates } : null);
+        }
     }, []);
 
     const login = useCallback(async (email: string, password: string) => {
@@ -76,11 +110,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setUser(response.user);
             await persistToken(response.token);
 
-            // Load permissions for non-admin users
             if (response.user.role !== 'ADMIN') {
                 const perms = await fetchPermissions(response.token);
                 setPermissions(perms);
             }
+
+            // Fetch locations
+            const locs = await fetchUserLocations(response.token);
+            setLocations(locs);
         } catch (e) {
             const message = e instanceof AuthError ? e.message : 'Error de conexión. Verifica tu red.';
             setError(message);
@@ -95,13 +132,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setToken(null);
         setError(null);
         setPermissions([]);
+        setLocations([]);
         await persistToken(null);
     }, []);
 
     const hasPermission = useCallback((module: string, action: 'read' | 'write'): boolean => {
         if (!user) return false;
-        if (user.role === 'ADMIN') return true;
-        const perm = permissions.find((p) => p.module === module);
+        if (user.role === 'ADMIN' || user.role === 'MANAGER') return true;
+        const perm = permissions.find(p => p.module === module);
         if (!perm) return false;
         return action === 'read' ? perm.canRead : perm.canWrite;
     }, [user, permissions]);
@@ -109,15 +147,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return (
         <AuthContext.Provider
             value={{
-                user,
-                token,
+                user, token,
                 isAuthenticated: !!user && !!token,
-                isLoading,
-                error,
-                login,
-                logout,
-                permissions,
-                hasPermission,
+                isLoading, error,
+                login, logout,
+                permissions, hasPermission,
+                appConfig, setAppConfig,
+                locations,
             }}
         >
             {children}

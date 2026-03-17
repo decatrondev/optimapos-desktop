@@ -1,79 +1,79 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
-import * as os from 'os';
 import * as dotenv from 'dotenv';
 
-// Load .env from project root
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 const isDev = process.env.NODE_ENV === 'development';
-
 let mainWindow: BrowserWindow | null = null;
 
-// ─── Token Storage (simple file-based) ────────────────────────────────────────
+// ─── Persistent Storage Paths ────────────────────────────────────────────────
 
-const TOKEN_FILE = path.join(app.getPath('userData'), 'auth_token.json');
-const PRINTER_FILE = path.join(app.getPath('userData'), 'printer_config.json');
+const DATA_DIR = app.getPath('userData');
+const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
 
-function readStoredToken(): string | null {
+interface AppConfig {
+    serverUrl: string;      // e.g. "https://doncarlyn.decatron.net"
+    tenantSlug: string;     // e.g. "doncarlyn"
+    tenantName: string;     // e.g. "Don Carlyn"
+    apiKey: string;         // desktop API key from backend
+    token: string | null;   // JWT token for user session
+    printerId: number | null;
+    locationId: number | null;
+    locationName: string | null;
+    rememberMe: boolean;
+}
+
+const DEFAULT_CONFIG: AppConfig = {
+    serverUrl: '',
+    tenantSlug: '',
+    tenantName: '',
+    apiKey: '',
+    token: null,
+    printerId: null,
+    locationId: null,
+    locationName: null,
+    rememberMe: false,
+};
+
+function readConfig(): AppConfig {
     try {
-        if (fs.existsSync(TOKEN_FILE)) {
-            const data = JSON.parse(fs.readFileSync(TOKEN_FILE, 'utf-8'));
-            return data.token || null;
+        if (fs.existsSync(CONFIG_FILE)) {
+            const data = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8'));
+            return { ...DEFAULT_CONFIG, ...data };
         }
     } catch {
-        // ignore
+        // corrupted config, reset
     }
-    return null;
+    return { ...DEFAULT_CONFIG };
 }
 
-function writeStoredToken(token: string | null): void {
+function writeConfig(updates: Partial<AppConfig>): AppConfig {
+    const current = readConfig();
+    const updated = { ...current, ...updates };
     try {
-        if (token) {
-            fs.writeFileSync(TOKEN_FILE, JSON.stringify({ token }), 'utf-8');
-        } else if (fs.existsSync(TOKEN_FILE)) {
-            fs.unlinkSync(TOKEN_FILE);
-        }
+        fs.writeFileSync(CONFIG_FILE, JSON.stringify(updated, null, 2), 'utf-8');
     } catch (e) {
-        console.error('[Auth] Token storage error:', e);
+        console.error('[Config] Write error:', e);
     }
+    return updated;
 }
 
-function readStoredPrinterId(): number | null {
-    try {
-        if (fs.existsSync(PRINTER_FILE)) {
-            const data = JSON.parse(fs.readFileSync(PRINTER_FILE, 'utf-8'));
-            return data.printerId || null;
-        }
-    } catch {
-        // ignore
-    }
-    return null;
-}
-
-function writeStoredPrinterId(printerId: number | null): void {
-    try {
-        if (printerId !== null) {
-            fs.writeFileSync(PRINTER_FILE, JSON.stringify({ printerId }), 'utf-8');
-        } else if (fs.existsSync(PRINTER_FILE)) {
-            fs.unlinkSync(PRINTER_FILE);
-        }
-    } catch (e) {
-        console.error('[Printer] Config storage error:', e);
-    }
-}
-
-// ─── Window ───────────────────────────────────────────────────────────────────
+// ─── Window ──────────────────────────────────────────────────────────────────
 
 function createWindow(): void {
+    const config = readConfig();
+    const titleParts = ['OptimaPOS Terminal'];
+    if (config.tenantName) titleParts.push(config.tenantName);
+    if (config.locationName) titleParts.push(config.locationName);
+
     mainWindow = new BrowserWindow({
         width: 1280,
         height: 800,
         minWidth: 900,
         minHeight: 600,
-        title: 'Don Carlyn - Cocina',
-        icon: path.join(__dirname, '..', 'src', 'assets', 'icon.png'),
+        title: titleParts.join(' — '),
         autoHideMenuBar: true,
         backgroundColor: '#0a0c10',
         webPreferences: {
@@ -95,20 +95,61 @@ function createWindow(): void {
     });
 }
 
-// ─── IPC Handlers ─────────────────────────────────────────────────────────────
+// ─── IPC Handlers ────────────────────────────────────────────────────────────
 
+// Config management
+ipcMain.handle('get-config', async () => readConfig());
+
+ipcMain.handle('save-config', async (_event, updates: Partial<AppConfig>) => {
+    const config = writeConfig(updates);
+    // Update window title
+    if (mainWindow) {
+        const parts = ['OptimaPOS Terminal'];
+        if (config.tenantName) parts.push(config.tenantName);
+        if (config.locationName) parts.push(config.locationName);
+        mainWindow.setTitle(parts.join(' — '));
+    }
+    return config;
+});
+
+// Token persistence (convenience shortcuts)
+ipcMain.handle('store-token', async (_event, token: string | null) => {
+    writeConfig({ token });
+});
+
+ipcMain.handle('get-token', async () => {
+    return readConfig().token;
+});
+
+// Printer ID persistence
+ipcMain.handle('store-printer-id', async (_event, printerId: number | null) => {
+    writeConfig({ printerId });
+});
+
+ipcMain.handle('get-printer-id', async () => {
+    return readConfig().printerId;
+});
+
+// Legacy env config (used by Vite env fallback)
+ipcMain.handle('get-env-config', async () => {
+    const config = readConfig();
+    return {
+        socketUrl: config.serverUrl || process.env.VITE_SOCKET_URL || '',
+        storeName: config.tenantName || process.env.VITE_STORE_NAME || 'OptimaPOS',
+        currencySymbol: process.env.VITE_CURRENCY_SYMBOL || 'S/',
+    };
+});
+
+// Ticket file output (legacy — kept for text file export)
 ipcMain.handle('print-ticket', async (_event, ticketText: string, fileName: string) => {
     try {
         const outputDir = process.env.TICKET_OUTPUT_DIR || 'Desktop';
-        const ticketDir = path.join(os.homedir(), outputDir);
-
+        const ticketDir = path.join(require('os').homedir(), outputDir);
         if (!fs.existsSync(ticketDir)) {
             fs.mkdirSync(ticketDir, { recursive: true });
         }
-
         const filePath = path.join(ticketDir, fileName);
         fs.writeFileSync(filePath, ticketText, 'utf-8');
-
         console.log(`[Printer] Ticket saved: ${filePath}`);
         return { success: true, path: filePath };
     } catch (error: any) {
@@ -117,31 +158,7 @@ ipcMain.handle('print-ticket', async (_event, ticketText: string, fileName: stri
     }
 });
 
-ipcMain.handle('get-env-config', async () => {
-    return {
-        socketUrl: process.env.VITE_SOCKET_URL || 'https://doncarlyn.decatron.net',
-        storeName: process.env.VITE_STORE_NAME || 'Don Carlyn',
-        currencySymbol: process.env.VITE_CURRENCY_SYMBOL || 'S/',
-    };
-});
-
-ipcMain.handle('store-token', async (_event, token: string | null) => {
-    writeStoredToken(token);
-});
-
-ipcMain.handle('get-token', async () => {
-    return readStoredToken();
-});
-
-ipcMain.handle('store-printer-id', async (_event, printerId: number | null) => {
-    writeStoredPrinterId(printerId);
-});
-
-ipcMain.handle('get-printer-id', async () => {
-    return readStoredPrinterId();
-});
-
-// ─── App Lifecycle ────────────────────────────────────────────────────────────
+// ─── App Lifecycle ───────────────────────────────────────────────────────────
 
 app.whenReady().then(() => {
     createWindow();

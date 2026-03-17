@@ -9,7 +9,7 @@ export type OrderStatus =
     | 'DELIVERED'
     | 'CANCELLED';
 
-export type OrderType = 'DELIVERY' | 'PICKUP';
+export type OrderType = 'DELIVERY' | 'PICKUP' | 'DINE_IN';
 
 export interface Order {
     id: number;
@@ -20,13 +20,19 @@ export interface Order {
     guestPhone: string | null;
     guestAddress: string | null;
     notes: string | null;
+    staffNotes: string | null;
+    tableNumber: string | null;
 
     subtotal: string | number;
     deliveryFee: string | number;
     discount: string | number;
     total: string | number;
 
+    paymentMethod: string | null;
+    paymentStatus: string | null;
+
     createdAt: string;
+    locationId: number | null;
 
     user?: {
         id: number;
@@ -39,6 +45,12 @@ export interface Order {
         id: number;
         name: string;
         surcharge: string | number;
+    } | null;
+
+    table?: {
+        id: number;
+        name: string;
+        zone: string | null;
     } | null;
 
     items: OrderItem[];
@@ -80,7 +92,7 @@ export interface OrderItem {
 
 // ─── Auth Types ──────────────────────────────────────────────────────────────
 
-export type Role = 'ADMIN' | 'VENDOR' | 'CLIENT';
+export type Role = 'ADMIN' | 'MANAGER' | 'VENDOR' | 'KITCHEN' | 'DELIVERY' | 'CLIENT' | 'SUPER_ADMIN';
 
 export interface AuthUser {
     id: number;
@@ -101,15 +113,37 @@ export interface LoginResponse {
     user: AuthUser;
 }
 
+// ─── App Config (persisted via Electron IPC) ────────────────────────────────
+
+export interface AppConfig {
+    serverUrl: string;
+    tenantSlug: string;
+    tenantName: string;
+    apiKey: string;
+    token: string | null;
+    printerId: number | null;
+    locationId: number | null;
+    locationName: string | null;
+    rememberMe: boolean;
+}
+
+export interface Location {
+    id: number;
+    name: string;
+    address: string | null;
+}
+
 // ─── Electron API Types ──────────────────────────────────────────────────────
 
 export interface ElectronAPI {
-    printTicket: (ticketText: string, fileName: string) => Promise<{ success: boolean; path?: string; error?: string }>;
-    getEnvConfig: () => Promise<{ socketUrl: string; storeName: string; currencySymbol: string }>;
+    getConfig: () => Promise<AppConfig>;
+    saveConfig: (updates: Partial<AppConfig>) => Promise<AppConfig>;
     storeToken: (token: string | null) => Promise<void>;
     getToken: () => Promise<string | null>;
     storePrinterId: (printerId: number | null) => Promise<void>;
     getPrinterId: () => Promise<number | null>;
+    getEnvConfig: () => Promise<{ socketUrl: string; storeName: string; currencySymbol: string }>;
+    printTicket: (ticketText: string, fileName: string) => Promise<{ success: boolean; path?: string; error?: string }>;
 }
 
 declare global {

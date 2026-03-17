@@ -32,9 +32,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, error, isLoad
             <div className="login-card">
                 {/* Header */}
                 <div className="login-card__header">
-                    <span className="login-card__logo">🍔</span>
+                    <span className="login-card__logo">⚡</span>
                     <h1 className="login-card__title">{storeName}</h1>
-                    <p className="login-card__subtitle">Terminal de Cocina</p>
+                    <p className="login-card__subtitle">OptimaPOS Terminal</p>
                 </div>
 
                 {/* Form */}
@@ -109,7 +109,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, error, isLoad
                     </button>
                 </form>
 
-                <p className="login-card__footer">Solo personal autorizado (Admin / Staff)</p>
+                <p className="login-card__footer">Solo personal autorizado</p>
             </div>
         </div>
     );

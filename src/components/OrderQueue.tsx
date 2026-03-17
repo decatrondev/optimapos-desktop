@@ -6,7 +6,7 @@ interface OrderQueueProps {
     orders: Order[];
     currencySymbol: string;
     storeName: string;
-    onAdvanceStatus?: (orderId: number, orderType: 'DELIVERY' | 'PICKUP') => Promise<void>;
+    onAdvanceStatus?: (orderId: number, orderType: string) => Promise<void>;
     onRemove: (orderId: number) => void;
     onPrint?: (order: Order) => void;
 }

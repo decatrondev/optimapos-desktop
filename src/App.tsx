@@ -7,178 +7,127 @@ import { AlertOverlay } from './components/AlertOverlay';
 import { LoginScreen } from './components/LoginScreen';
 import { PrinterSetup } from './components/PrinterSetup';
 import { TicketPreview } from './components/TicketPreview';
-import { Order } from './types/order';
-import { PrintRule, TicketTemplate } from './types/printer-config';
+import { ServerSetup } from './components/ServerSetup';
+import { LocationPicker } from './components/LocationPicker';
+import { Order, Location } from './types/order';
+import { PrintRule, TicketTemplate, PrintJob } from './types/printer-config';
 import { updateOrderStatus, getNextStatus, fetchActiveOrders } from './services/order.service';
 import { printTicket } from './services/printer.service';
+import { socketService } from './services/socket.service';
 import {
     fetchRules, fetchTemplate, matchRulesForOrder,
     getStoredPrinterId,
 } from './services/printer-config.service';
 
-// Config from env (Vite injects VITE_ vars at build time)
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'https://doncarlyn.decatron.net';
-const STORE_NAME = import.meta.env.VITE_STORE_NAME || 'Don Carlyn';
-const CURRENCY_SYMBOL = import.meta.env.VITE_CURRENCY_SYMBOL || 'S/';
+const CURRENCY_SYMBOL = 'S/';
 
-// Dev mode demo order for testing without server
-const DEMO_ORDER: Order = {
-    id: Date.now(),
-    code: 'DEMO',
-    status: 'PENDING',
-    type: 'DELIVERY',
-    guestName: 'Cliente de Prueba',
-    guestPhone: '999-888-777',
-    guestAddress: 'Av. Test 123, Lima',
-    notes: 'Sin mayonesa por favor',
-    subtotal: '38.00',
-    deliveryFee: '5.00',
-    discount: '0.00',
-    total: '43.00',
-    createdAt: new Date().toISOString(),
-    user: null,
-    zone: { id: 1, name: 'Centro', surcharge: '0.00' },
-    items: [
-        {
-            id: 1, quantity: 2, unitPrice: '15.00', totalPrice: '30.00', notes: null,
-            product: { id: 1, name: 'Hamburguesa Doble', description: null },
-            combo: null, variant: null,
-            addons: [
-                { id: 1, quantity: 1, price: '3.00', addon: { id: 1, name: 'Bacon Extra' } },
-                { id: 2, quantity: 1, price: '2.00', addon: { id: 2, name: 'Extra Queso' } },
-            ],
-        },
-        {
-            id: 2, quantity: 1, unitPrice: '8.00', totalPrice: '8.00', notes: 'Bien crujientes',
-            product: { id: 2, name: 'Papas Fritas Grande', description: null },
-            combo: null, variant: null, addons: [],
-        },
-    ],
-};
+// ─── Kitchen Dashboard (main operational view) ──────────────────────────────
 
-/**
- * Kitchen Dashboard — the main operational view.
- */
-const KitchenDashboard: React.FC<{ printerId: number; onResetPrinter: () => void }> = ({ printerId, onResetPrinter }) => {
-    const { user, token, logout, hasPermission } = useAuth();
+const KitchenDashboard: React.FC<{
+    printerId: number;
+    onResetPrinter: () => void;
+}> = ({ printerId, onResetPrinter }) => {
+    const { user, token, logout, hasPermission, appConfig } = useAuth();
     const canReadOrders = hasPermission('orders', 'read');
     const canWriteOrders = hasPermission('orders', 'write');
-    const { orders, isConnected, hasNewAlert, dismissAlert, updateOrderLocally, removeOrder } = useSocket(SOCKET_URL, token);
-    const [demoOrders, setDemoOrders] = useState<Order[]>([]);
+
+    const serverUrl = appConfig?.serverUrl || '';
+    const storeName = appConfig?.tenantName || 'OptimaPOS';
+    const locationName = appConfig?.locationName || null;
+
+    const { orders, isConnected, hasNewAlert, printJobs, dismissAlert, updateOrderLocally, removeOrder, clearPrintJob } = useSocket(serverUrl, token);
     const [initialOrders, setInitialOrders] = useState<Order[]>([]);
     const [rules, setRules] = useState<PrintRule[]>([]);
     const [ticketPreview, setTicketPreview] = useState<{ order: Order; template: TicketTemplate } | null>(null);
 
-    // Load existing active orders and print rules on mount
+    // Desktop socket auth (API key based)
     useEffect(() => {
-        if (!token) return;
-        if (!canReadOrders) return;
-        fetchActiveOrders(token).then((fetched) => {
-            console.log(`[Orders] Loaded ${fetched.length} active orders from API`);
-            setInitialOrders(fetched);
-        }).catch((e) => {
-            console.error('[Orders] Failed to load initial orders:', e);
-            // Don't crash on 403 — user may not have permission
-        });
+        if (!isConnected || !appConfig?.apiKey || !appConfig?.tenantSlug) return;
 
-        fetchRules(token).then((r) => {
+        socketService.desktopConnect(
+            appConfig.apiKey,
+            appConfig.tenantSlug,
+            appConfig.locationId || undefined
+        ).then(resp => {
+            if (resp.success) {
+                console.log('[App] Desktop socket authenticated');
+                // Set printer statuses for heartbeat
+                socketService.setPrinterStatuses([{ id: printerId, status: 'online' }]);
+            } else {
+                console.warn('[App] Desktop socket auth failed:', resp.error);
+            }
+        });
+    }, [isConnected, appConfig?.apiKey, appConfig?.tenantSlug, appConfig?.locationId, printerId]);
+
+    // Load active orders and print rules
+    useEffect(() => {
+        if (!token || !canReadOrders) return;
+
+        fetchActiveOrders(token).then(fetched => {
+            console.log(`[Orders] Loaded ${fetched.length} active orders`);
+            setInitialOrders(fetched);
+        }).catch(e => console.error('[Orders] Load failed:', e));
+
+        fetchRules(token).then(r => {
             console.log(`[PrintConfig] Loaded ${r.length} rules`);
             setRules(r);
-        }).catch((e) => console.error('[PrintConfig] Failed to load rules:', e));
+        }).catch(e => console.error('[PrintConfig] Load failed:', e));
     }, [token, canReadOrders]);
 
-    // Merge: socket orders + initial orders (no duplicates) + demo orders
+    // Process auto-print jobs
+    useEffect(() => {
+        for (const job of printJobs) {
+            if (job.rule.autoPrint) {
+                console.log(`[AutoPrint] Processing: ${job.jobId} | ${job.event} → ${job.printer.name}`);
+                // For now, log and acknowledge. Real ESC/POS printing comes in Phase 2.
+                clearPrintJob(job.jobId);
+            }
+        }
+    }, [printJobs, clearPrintJob]);
+
+    // Merge socket + initial orders (no dupes)
     const mergedOrders = [...orders];
     for (const io of initialOrders) {
-        if (!mergedOrders.some((o) => o.id === io.id)) {
+        if (!mergedOrders.some(o => o.id === io.id)) {
             mergedOrders.push(io);
         }
     }
-    const allOrders = [...mergedOrders, ...demoOrders];
 
-    const handleAddDemo = useCallback(() => {
-        const codes = ['A1B2', 'X7Z9', 'K3M5', 'P9Q1', 'W2E4'];
-        setDemoOrders((prev) => [
-            {
-                ...DEMO_ORDER,
-                id: Date.now(),
-                code: codes[Math.floor(Math.random() * codes.length)],
-                createdAt: new Date().toISOString(),
-            },
-            ...prev,
-        ]);
-    }, []);
-
-    const handleAdvanceStatus = useCallback(async (orderId: number, orderType: 'DELIVERY' | 'PICKUP') => {
-        const order = allOrders.find((o) => o.id === orderId);
-        if (!order) return;
+    const handleAdvanceStatus = useCallback(async (orderId: number, orderType: string) => {
+        const order = mergedOrders.find(o => o.id === orderId);
+        if (!order || !token) return;
         const nextStatus = getNextStatus(order.status, orderType);
         if (!nextStatus) return;
 
-        const isDemo = demoOrders.some((o) => o.id === orderId);
-        if (isDemo) {
-            setDemoOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: nextStatus } : o)));
-            return;
-        }
-
-        if (!token) throw new Error('No autenticado');
         await updateOrderStatus(orderId, nextStatus, token);
         updateOrderLocally(orderId, nextStatus);
-        setInitialOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: nextStatus } : o)));
-    }, [allOrders, demoOrders, token, updateOrderLocally, canWriteOrders]);
+        setInitialOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: nextStatus } : o));
+    }, [mergedOrders, token, updateOrderLocally]);
 
     const handleRemove = useCallback((orderId: number) => {
         removeOrder(orderId);
-        setDemoOrders((prev) => prev.filter((o) => o.id !== orderId));
     }, [removeOrder]);
 
-    /**
-     * Handles the print button: matches rules, fetches template, shows preview.
-     */
     const handlePrintTicket = useCallback(async (order: Order) => {
         if (!token) return;
 
-        // Match rules for this printer and order
         const matchedRules = matchRulesForOrder(rules, printerId, order);
-
         if (matchedRules.length === 0) {
-            // No rule matched — use a fallback: show the order as plain text
-            console.warn('[Print] No matching rules for this printer/order, using fallback');
-            await printTicket(order, STORE_NAME, CURRENCY_SYMBOL);
+            await printTicket(order, storeName, CURRENCY_SYMBOL);
             return;
         }
 
-        // Use the first matching rule's template
         const rule = matchedRules[0];
         try {
             const template = await fetchTemplate(token, rule.templateId);
-
-            // Log the full rendered ticket to DevTools console
-            const { renderTemplate } = await import('./services/escpos-renderer');
-            const ticketText = renderTemplate(template, order, CURRENCY_SYMBOL);
-            console.log(`\n🧾 ═══ TICKET PREVIEW: ${template.name} (${template.width}mm) ═══`);
-            console.log(`📋 Template ID: ${template.id} | Default: ${template.isDefault}`);
-            console.log(`📐 Elementos del template:`);
-            template.content.elements.forEach((el, i) => {
-                console.log(`  [${i}] type: ${el.type} | align: ${el.align || 'left'} | bold: ${!!el.bold} | scaleW: ${el.scaleW || 1} | scaleH: ${el.scaleH || 1} | invert: ${!!el.invert} | font: ${el.font || 'A'}`,
-                    el.type === 'items_list' ? `| showPrices: ${(el as any).showPrices !== false} | showAddons: ${(el as any).showAddons !== false}` : '',
-                    el.type === 'header' || el.type === 'text' ? `| content: "${(el as any).content}"` : ''
-                );
-            });
-            console.log(`\n📜 Texto renderizado ESC/POS:\n${ticketText}`);
-            console.log(`🧾 ═══ FIN ═══\n`);
-
             setTicketPreview({ order, template });
-        } catch (e) {
-            console.error('[Print] Failed to fetch template:', e);
-            // Fallback to text ticket
-            await printTicket(order, STORE_NAME, CURRENCY_SYMBOL);
+        } catch {
+            await printTicket(order, storeName, CURRENCY_SYMBOL);
         }
-    }, [token, rules, printerId]);
+    }, [token, rules, printerId, storeName]);
 
     const handleTicketPrint = useCallback(async () => {
         if (!ticketPreview) return;
-        // Use template-based renderer for the text file output
         const { printFromTemplate } = await import('./services/printer.service');
         await printFromTemplate(ticketPreview.order, ticketPreview.template, CURRENCY_SYMBOL);
         setTicketPreview(null);
@@ -189,11 +138,13 @@ const KitchenDashboard: React.FC<{ printerId: number; onResetPrinter: () => void
     return (
         <div className="app">
             <StatusBar
-                storeName={STORE_NAME}
+                storeName={storeName}
+                locationName={locationName}
                 isConnected={isConnected}
-                orderCount={allOrders.filter((o) => o.status !== 'DELIVERED' && o.status !== 'CANCELLED').length}
+                orderCount={mergedOrders.filter(o => o.status !== 'DELIVERED' && o.status !== 'CANCELLED').length}
                 user={user}
                 onLogout={logout}
+                onSettings={onResetPrinter}
             />
 
             {!canReadOrders ? (
@@ -202,30 +153,19 @@ const KitchenDashboard: React.FC<{ printerId: number; onResetPrinter: () => void
                         <span style={{ fontSize: '4rem' }}>🔒</span>
                         <h2 style={{ marginTop: '1rem', fontSize: '1.5rem', color: '#fff' }}>Sin permisos</h2>
                         <p style={{ marginTop: '0.5rem', color: '#999', maxWidth: '400px', margin: '0.5rem auto 0' }}>
-                            Tu cuenta no tiene permisos para ver pedidos. Contacta al administrador para obtener acceso.
+                            Tu cuenta no tiene permisos para ver pedidos. Contacta al administrador.
                         </p>
                     </div>
                 </div>
             ) : (
-                <>
-                    <div className="app__toolbar">
-                        <button className="btn btn--demo" onClick={handleAddDemo}>
-                            🧪 Simular Pedido
-                        </button>
-                        <button className="btn btn--demo" onClick={onResetPrinter} title="Cambiar impresora">
-                            🖨️ Puesto: #{printerId}
-                        </button>
-                    </div>
-
-                    <OrderQueue
-                        orders={allOrders}
-                        currencySymbol={CURRENCY_SYMBOL}
-                        storeName={STORE_NAME}
-                        onAdvanceStatus={canWriteOrders ? handleAdvanceStatus : undefined}
-                        onRemove={handleRemove}
-                        onPrint={handlePrintTicket}
-                    />
-                </>
+                <OrderQueue
+                    orders={mergedOrders}
+                    currencySymbol={CURRENCY_SYMBOL}
+                    storeName={storeName}
+                    onAdvanceStatus={canWriteOrders ? handleAdvanceStatus : undefined}
+                    onRemove={handleRemove}
+                    onPrint={handlePrintTicket}
+                />
             )}
 
             <AlertOverlay
@@ -239,7 +179,7 @@ const KitchenDashboard: React.FC<{ printerId: number; onResetPrinter: () => void
                     template={ticketPreview.template}
                     order={ticketPreview.order}
                     currencySymbol={CURRENCY_SYMBOL}
-                    storeName={STORE_NAME}
+                    storeName={storeName}
                     onClose={() => setTicketPreview(null)}
                     onPrint={handleTicketPrint}
                 />
@@ -248,60 +188,93 @@ const KitchenDashboard: React.FC<{ printerId: number; onResetPrinter: () => void
     );
 };
 
-/**
- * Root App component — handles: Loading → Login → Printer Setup → Dashboard
- */
+// ─── Root App — Full Flow ────────────────────────────────────────────────────
+
 export const App: React.FC = () => {
-    const { isAuthenticated, isLoading, login, error, token } = useAuth();
+    const { isAuthenticated, isLoading, login, error, token, appConfig, setAppConfig, locations, user } = useAuth();
     const [printerId, setPrinterId] = useState<number | null>(null);
     const [printerLoading, setPrinterLoading] = useState(true);
 
-    // Check for stored printerId on mount
+    // Check stored printerId
     useEffect(() => {
-        getStoredPrinterId().then((id) => {
+        getStoredPrinterId().then(id => {
             setPrinterId(id);
             setPrinterLoading(false);
         });
     }, []);
 
-    // Loading screen
+    // ── Loading ──
     if (isLoading || printerLoading) {
         return (
             <div className="app loading-screen">
                 <div className="loading-screen__content">
-                    <span className="loading-screen__icon">🍔</span>
+                    <span className="loading-screen__icon">⚡</span>
                     <div className="loading-screen__spinner" />
-                    <p className="loading-screen__text">Cargando...</p>
+                    <p className="loading-screen__text">OptimaPOS Terminal</p>
                 </div>
             </div>
         );
     }
 
-    // Not authenticated — login
-    if (!isAuthenticated) {
+    // ── Step 1: Server Setup (first time only) ──
+    if (!appConfig?.serverUrl) {
         return (
-            <LoginScreen onLogin={login} error={error} isLoading={isLoading} storeName={STORE_NAME} />
-        );
-    }
-
-    // No printer selected — setup
-    if (printerId === null) {
-        return (
-            <PrinterSetup
-                token={token!}
-                storeName={STORE_NAME}
-                onComplete={(id) => setPrinterId(id)}
+            <ServerSetup
+                onComplete={async (serverUrl, tenantSlug) => {
+                    await setAppConfig({ serverUrl, tenantSlug });
+                }}
             />
         );
     }
 
-    // All good — dashboard
+    // ── Step 2: Login ──
+    if (!isAuthenticated) {
+        return (
+            <LoginScreen
+                onLogin={login}
+                error={error}
+                isLoading={isLoading}
+                storeName={appConfig?.tenantName || 'OptimaPOS'}
+            />
+        );
+    }
+
+    // ── Step 3: Location picker (if 2+ locations and none selected) ──
+    if (locations.length > 1 && !appConfig?.locationId) {
+        return (
+            <LocationPicker
+                locations={locations}
+                storeName={appConfig?.tenantName || user?.name || 'OptimaPOS'}
+                onSelect={async (loc: Location) => {
+                    await setAppConfig({ locationId: loc.id, locationName: loc.name });
+                }}
+            />
+        );
+    }
+
+    // Auto-select if only 1 location and none saved
+    if (locations.length === 1 && !appConfig?.locationId) {
+        setAppConfig({ locationId: locations[0].id, locationName: locations[0].name });
+    }
+
+    // ── Step 4: Printer setup ──
+    if (printerId === null) {
+        return (
+            <PrinterSetup
+                token={token!}
+                storeName={appConfig?.tenantName || 'OptimaPOS'}
+                onComplete={id => setPrinterId(id)}
+            />
+        );
+    }
+
+    // ── Step 5: Dashboard ──
     return (
         <KitchenDashboard
             printerId={printerId}
             onResetPrinter={() => {
                 setPrinterId(null);
-                import('./services/printer-config.service').then((m) => m.storePrinterId(null));
+                import('./services/printer-config.service').then(m => m.storePrinterId(null));
             }}
         />
     );
