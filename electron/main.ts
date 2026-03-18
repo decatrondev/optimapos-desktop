@@ -111,8 +111,8 @@ function setupAutoUpdater(): void {
         return;
     }
 
-    // Don't auto-download — let user decide
-    autoUpdater.autoDownload = false;
+    // Auto-download and install on quit — seamless for the user
+    autoUpdater.autoDownload = true;
     autoUpdater.autoInstallOnAppQuit = true;
 
     autoUpdater.on('checking-for-update', () => {

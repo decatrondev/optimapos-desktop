@@ -1,6 +1,6 @@
 {
   "name": "optimapos-desktop",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "OptimaPOS Terminal — App de escritorio para restaurantes",
   "productName": "OptimaPOS Terminal",
   "main": "dist-electron/main.js",
@@ -69,13 +69,14 @@
       "icon": "build/icon.png"
     },
     "nsis": {
-      "oneClick": false,
-      "perMachine": true,
-      "allowToChangeInstallationDirectory": true,
+      "oneClick": true,
+      "perMachine": false,
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
       "installerHeaderIcon": "build/icon.ico",
-      "shortcutName": "OptimaPOS Terminal"
+      "shortcutName": "OptimaPOS Terminal",
+      "deleteAppDataOnUninstall": false,
+      "include": "build/installer.nsh"
     },
     "mac": {
       "target": [
