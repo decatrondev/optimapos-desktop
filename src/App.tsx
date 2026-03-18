@@ -219,7 +219,7 @@ const KitchenDashboard: React.FC<{
 // ─── Root App — Full Flow ────────────────────────────────────────────────────
 
 export const App: React.FC = () => {
-    const { isAuthenticated, isLoading, login, error, token, appConfig, setAppConfig, locations, user } = useAuth();
+    const { isAuthenticated, isLoading, login, logout, error, token, appConfig, setAppConfig, locations, user } = useAuth();
     const [printerId, setPrinterId] = useState<number | null>(null);
     const [printerLoading, setPrinterLoading] = useState(true);
 
@@ -301,6 +301,8 @@ export const App: React.FC = () => {
                 storeName={appConfig?.tenantName || 'OptimaPOS'}
                 locationId={appConfig?.locationId || undefined}
                 onComplete={id => setPrinterId(id)}
+                onSkip={() => setPrinterId(-1)}
+                onLogout={logout}
             />
         );
     }

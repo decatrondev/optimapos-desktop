@@ -7,9 +7,11 @@ interface PrinterSetupProps {
     storeName: string;
     locationId?: number;
     onComplete: (printerId: number) => void;
+    onSkip?: () => void;
+    onLogout?: () => void;
 }
 
-export const PrinterSetup: React.FC<PrinterSetupProps> = ({ token, storeName, locationId, onComplete }) => {
+export const PrinterSetup: React.FC<PrinterSetupProps> = ({ token, storeName, locationId, onComplete, onSkip, onLogout }) => {
     const [printers, setPrinters] = useState<Printer[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -73,8 +75,13 @@ export const PrinterSetup: React.FC<PrinterSetupProps> = ({ token, storeName, lo
                     {!loading && !error && printers.length === 0 && (
                         <div className="printer-setup__empty">
                             <span className="printer-setup__empty-icon">📭</span>
-                            <p>No hay impresoras configuradas.</p>
+                            <p>No hay impresoras configuradas para este local.</p>
                             <p className="printer-setup__hint">Configura impresoras desde el panel de admin.</p>
+                            {onSkip && (
+                                <button className="login-card__submit" onClick={onSkip} style={{ marginTop: '16px' }}>
+                                    Continuar sin impresora
+                                </button>
+                            )}
                         </div>
                     )}
 
@@ -120,6 +127,14 @@ export const PrinterSetup: React.FC<PrinterSetupProps> = ({ token, storeName, lo
                                 )}
                             </button>
                         </>
+                    )}
+                    {onLogout && (
+                        <button
+                            onClick={onLogout}
+                            style={{ marginTop: '12px', background: 'none', border: 'none', color: '#999', cursor: 'pointer', fontSize: '0.85rem', textDecoration: 'underline' }}
+                        >
+                            Cerrar sesión
+                        </button>
                     )}
                 </div>
             </div>
