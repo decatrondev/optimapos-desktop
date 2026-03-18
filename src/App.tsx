@@ -29,15 +29,17 @@ const KitchenDashboard: React.FC<{
     onChangeLocation?: () => void;
     canChangeLocation?: boolean;
 }> = ({ printerId, onResetPrinter, onChangeLocation, canChangeLocation }) => {
-    const { user, token, logout, hasPermission, appConfig } = useAuth();
+    const { user, token, logout, hasPermission, appConfig, locations } = useAuth();
     const canReadOrders = hasPermission('orders', 'read');
     const canWriteOrders = hasPermission('orders', 'write');
+    const isAllLocations = appConfig?.locationId === -1;
 
     const serverUrl = appConfig?.serverUrl || '';
     const storeName = appConfig?.tenantName || 'OptimaPOS';
     const locationName = appConfig?.locationName || null;
 
-    const { orders, isConnected, hasNewAlert, printJobs, dismissAlert, updateOrderLocally, removeOrder, clearPrintJob } = useSocket(serverUrl, token, appConfig?.locationId || undefined);
+    const socketLocId = appConfig?.locationId && appConfig.locationId > 0 ? appConfig.locationId : undefined;
+    const { orders, isConnected, hasNewAlert, printJobs, dismissAlert, updateOrderLocally, removeOrder, clearPrintJob } = useSocket(serverUrl, token, socketLocId);
     const [initialOrders, setInitialOrders] = useState<Order[]>([]);
     const [rules, setRules] = useState<PrintRule[]>([]);
     const [ticketPreview, setTicketPreview] = useState<{ order: Order; template: TicketTemplate } | null>(null);
@@ -66,9 +68,9 @@ const KitchenDashboard: React.FC<{
     useEffect(() => {
         if (!token || !canReadOrders) return;
 
-        const locId = appConfig?.locationId || undefined;
+        const locId = appConfig?.locationId && appConfig.locationId > 0 ? appConfig.locationId : undefined;
         fetchActiveOrders(token, locId).then(fetched => {
-            console.log(`[Orders] Loaded ${fetched.length} active orders (location: ${locId})`);
+            console.log(`[Orders] Loaded ${fetched.length} active orders (location: ${locId ?? 'ALL'})`);
             setInitialOrders(fetched);
         }).catch(e => console.error('[Orders] Load failed:', e));
 
@@ -177,6 +179,7 @@ const KitchenDashboard: React.FC<{
                     onAdvanceStatus={canWriteOrders ? handleAdvanceStatus : undefined}
                     onRemove={handleRemove}
                     onPrint={handlePrintTicket}
+                    locationMap={isAllLocations ? Object.fromEntries(locations.map(l => [l.id, l.name])) : undefined}
                 />
             )}
 
@@ -268,7 +271,11 @@ export const App: React.FC = () => {
     }
 
     // ── Step 3: Validate saved location against user's allowed locations ──
-    const savedLocValid = appConfig?.locationId && locations.some(l => l.id === appConfig.locationId);
+    const isAdmin = user?.role === 'ADMIN' || user?.role === 'MANAGER';
+    const isAllLocations = appConfig?.locationId === -1;
+    const savedLocValid = isAllLocations
+        ? isAdmin // only ADMIN/MANAGER can use "all locations"
+        : appConfig?.locationId && locations.some(l => l.id === appConfig.locationId);
 
     // If saved locationId is NOT in user's locations, clear it
     if (appConfig?.locationId && locations.length > 0 && !savedLocValid) {
@@ -281,6 +288,10 @@ export const App: React.FC = () => {
             <LocationPicker
                 locations={locations}
                 storeName={appConfig?.tenantName || user?.name || 'OptimaPOS'}
+                showAllOption={isAdmin}
+                onSelectAll={async () => {
+                    await setAppConfig({ locationId: -1 as any, locationName: 'Todos los Locales' });
+                }}
                 onSelect={async (loc: Location) => {
                     await setAppConfig({ locationId: loc.id, locationName: loc.name });
                 }}

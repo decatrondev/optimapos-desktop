@@ -443,6 +443,17 @@ body::before {
   font-weight: 500;
 }
 
+/* Location badge */
+.order-card__location-badge {
+  font-size: 0.75rem;
+  color: var(--primary);
+  background: rgba(99, 102, 241, 0.1);
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
 /* Customer */
 .order-card__customer {
   display: flex;
@@ -1715,6 +1726,15 @@ body::before {
   border-color: var(--accent-primary);
   background: var(--accent-primary-glow);
   box-shadow: 0 0 16px rgba(249, 115, 22, 0.15);
+}
+
+.printer-setup__option--all {
+  border-color: var(--primary);
+  background: rgba(99, 102, 241, 0.08);
+}
+.printer-setup__option--all:hover {
+  border-color: var(--primary);
+  background: rgba(99, 102, 241, 0.15);
 }
 
 .printer-setup__option-icon {

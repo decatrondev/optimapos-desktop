@@ -10,6 +10,7 @@ interface OrderCardProps {
     onRemove: (orderId: number) => void;
     onPrint?: (order: Order) => void;
     isNew?: boolean;
+    locationLabel?: string;
 }
 
 function getItemName(item: OrderItem): string {
@@ -33,7 +34,7 @@ function timeAgo(isoString: string): string {
     return `hace ${hrs}h ${mins % 60}m`;
 }
 
-export const OrderCard: React.FC<OrderCardProps> = ({ order, currencySymbol, storeName, onAdvanceStatus, onRemove, onPrint, isNew }) => {
+export const OrderCard: React.FC<OrderCardProps> = ({ order, currencySymbol, storeName, onAdvanceStatus, onRemove, onPrint, isNew, locationLabel }) => {
     const [advancing, setAdvancing] = useState(false);
     const [statusError, setStatusError] = useState<string | null>(null);
 
@@ -72,6 +73,11 @@ export const OrderCard: React.FC<OrderCardProps> = ({ order, currencySymbol, sto
                     <span className="order-card__time">{timeAgo(order.createdAt)}</span>
                 </div>
             </div>
+
+            {/* Location badge (visible in "all locations" mode) */}
+            {locationLabel && (
+                <div className="order-card__location-badge">📍 {locationLabel}</div>
+            )}
 
             {/* Customer */}
             <div className="order-card__customer">

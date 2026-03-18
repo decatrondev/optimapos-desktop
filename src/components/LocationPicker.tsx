@@ -5,9 +5,11 @@ interface LocationPickerProps {
     locations: Location[];
     storeName: string;
     onSelect: (location: Location) => void;
+    showAllOption?: boolean;
+    onSelectAll?: () => void;
 }
 
-export const LocationPicker: React.FC<LocationPickerProps> = ({ locations, storeName, onSelect }) => {
+export const LocationPicker: React.FC<LocationPickerProps> = ({ locations, storeName, onSelect, showAllOption, onSelectAll }) => {
     return (
         <div className="login-screen">
             <div className="login-screen__bg-orb login-screen__bg-orb--1" />
@@ -23,6 +25,16 @@ export const LocationPicker: React.FC<LocationPickerProps> = ({ locations, store
 
                 <div className="login-card__form">
                     <div className="printer-setup__grid">
+                        {showAllOption && onSelectAll && (
+                            <button
+                                className="printer-setup__option printer-setup__option--all"
+                                onClick={onSelectAll}
+                            >
+                                <span className="printer-setup__option-icon">🌐</span>
+                                <span className="printer-setup__option-name">Todos los Locales</span>
+                                <span className="printer-setup__option-type">Ver pedidos de todas las sucursales</span>
+                            </button>
+                        )}
                         {locations.map((loc) => (
                             <button
                                 key={loc.id}
