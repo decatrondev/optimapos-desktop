@@ -46,6 +46,23 @@ export function useSocket(socketUrl: string, token?: string | null, locationId?:
             stopAlertRef.current = playRepeatingAlert(3000, 3);
         });
 
+        // Listen for order updates (status changes, edits, assignments)
+        const unsubOrderUpdated = socketService.onOrderUpdated((updatedOrder) => {
+            if (locationId && updatedOrder.locationId && updatedOrder.locationId !== locationId) {
+                return;
+            }
+            setOrders((prev) => {
+                const exists = prev.some(o => o.id === updatedOrder.id);
+                if (exists) {
+                    // Update existing order in place
+                    return prev.map(o => o.id === updatedOrder.id ? { ...o, ...updatedOrder } : o);
+                } else {
+                    // New order we didn't have yet — add it
+                    return [updatedOrder, ...prev];
+                }
+            });
+        });
+
         const unsubPrintJob = socketService.onPrintJob((job) => {
             console.log(`[PrintJob] Received: ${job.jobId} | ${job.event} | printer: ${job.printer.name}`);
             setPrintJobs(prev => [...prev, job]);
@@ -60,6 +77,7 @@ export function useSocket(socketUrl: string, token?: string | null, locationId?:
         return () => {
             unsubConnection();
             unsubOrder();
+            unsubOrderUpdated();
             unsubPrintJob();
             socketService.disconnect();
             if (stopAlertRef.current) stopAlertRef.current();

@@ -3,12 +3,14 @@ import { Order } from '../types/order';
 import { PrintJob } from '../types/printer-config';
 
 type NewOrderCallback = (order: Order) => void;
+type OrderUpdatedCallback = (order: Order) => void;
 type PrintJobCallback = (job: PrintJob) => void;
 type ConnectionCallback = (connected: boolean) => void;
 
 class SocketService {
     private socket: Socket | null = null;
     private orderCallbacks: NewOrderCallback[] = [];
+    private orderUpdatedCallbacks: OrderUpdatedCallback[] = [];
     private printJobCallbacks: PrintJobCallback[] = [];
     private connectionCallbacks: ConnectionCallback[] = [];
     private _isConnected = false;
@@ -57,10 +59,16 @@ class SocketService {
             this.connectionCallbacks.forEach(cb => cb(false));
         });
 
-        // Listen for new orders (web frontend event)
+        // Listen for new orders
         this.socket.on('new_order', (data: Order) => {
             console.log('[Socket] New order:', data.code);
             this.orderCallbacks.forEach(cb => cb(data));
+        });
+
+        // Listen for order updates (status changes, assignments, edits)
+        this.socket.on('order_updated', (data: Order) => {
+            console.log('[Socket] Order updated:', data.code || data.id, '→', data.status);
+            this.orderUpdatedCallbacks.forEach(cb => cb(data));
         });
 
         // Listen for print jobs (desktop-specific event from printEventService)
@@ -148,6 +156,11 @@ class SocketService {
     onNewOrder(callback: NewOrderCallback): () => void {
         this.orderCallbacks.push(callback);
         return () => { this.orderCallbacks = this.orderCallbacks.filter(cb => cb !== callback); };
+    }
+
+    onOrderUpdated(callback: OrderUpdatedCallback): () => void {
+        this.orderUpdatedCallbacks.push(callback);
+        return () => { this.orderUpdatedCallbacks = this.orderUpdatedCallbacks.filter(cb => cb !== callback); };
     }
 
     onPrintJob(callback: PrintJobCallback): () => void {

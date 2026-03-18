@@ -85,7 +85,7 @@ const OperationalView: React.FC<{
         });
     }, [isConnected, appConfig?.apiKey, appConfig?.tenantSlug, appConfig?.locationId, printerId]);
 
-    // Load active orders using the correct endpoint for each role
+    // Load active orders using the correct endpoint for each role + poll every 30s
     useEffect(() => {
         if (!token) return;
 
@@ -95,13 +95,10 @@ const OperationalView: React.FC<{
             let fetched: Order[] = [];
             try {
                 if (userRole === 'KITCHEN') {
-                    // Kitchen uses /api/orders/kitchen/active (requires kitchen_view:read)
                     fetched = await fetchKitchenOrders(token, locId);
                 } else if (userRole === 'DELIVERY') {
-                    // Delivery uses /api/orders/delivery/active (requires delivery_view:read)
                     fetched = await fetchDeliveryOrders(token, locId);
                 } else {
-                    // ADMIN, MANAGER, VENDOR use /api/orders (requires orders:read)
                     fetched = await fetchActiveOrders(token, locId);
                 }
                 console.log(`[Orders] Loaded ${fetched.length} active orders (role: ${userRole}, location: ${locId ?? 'ALL'})`);
@@ -113,6 +110,9 @@ const OperationalView: React.FC<{
 
         loadOrders();
 
+        // Poll every 30s as fallback — ensures data stays fresh even if socket misses events
+        const pollInterval = setInterval(loadOrders, 30_000);
+
         // Only fetch print rules for roles that have printer_config access (not KITCHEN/DELIVERY)
         if (userRole !== 'KITCHEN' && userRole !== 'DELIVERY') {
             fetchRules(token).then(r => {
@@ -120,6 +120,8 @@ const OperationalView: React.FC<{
                 setRules(r);
             }).catch(e => console.error('[PrintConfig] Load failed:', e));
         }
+
+        return () => clearInterval(pollInterval);
     }, [token, userRole]);
 
     // Process print jobs
@@ -136,13 +138,15 @@ const OperationalView: React.FC<{
         }
     }, [printJobs, clearPrintJob, activePrintJob]);
 
-    // Merge socket + initial orders (no dupes)
-    const mergedOrders = [...orders];
+    // Merge socket + initial orders — socket data takes priority (more recent)
+    const orderMap = new Map<number, Order>();
     for (const io of initialOrders) {
-        if (!mergedOrders.some(o => o.id === io.id)) {
-            mergedOrders.push(io);
-        }
+        orderMap.set(io.id, io);
     }
+    for (const so of orders) {
+        orderMap.set(so.id, { ...(orderMap.get(so.id) || {}), ...so } as Order);
+    }
+    const mergedOrders = Array.from(orderMap.values());
 
     const handleAdvanceStatus = useCallback(async (orderId: number, orderType: string) => {
         const order = mergedOrders.find(o => o.id === orderId);
