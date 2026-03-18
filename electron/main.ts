@@ -7,9 +7,10 @@ import { autoUpdater } from 'electron-updater';
 
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
-// Linux: disable sandbox to avoid permission issues on VMs and some distros
+// Linux: disable sandbox to avoid SUID permission issues on VMs and some distros
 if (process.platform === 'linux') {
     app.commandLine.appendSwitch('no-sandbox');
+    app.commandLine.appendSwitch('disable-gpu-sandbox');
 }
 
 const isDev = process.env.NODE_ENV === 'development';

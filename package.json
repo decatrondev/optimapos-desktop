@@ -1,6 +1,6 @@
 {
   "name": "optimapos-desktop",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "OptimaPOS Terminal — App de escritorio para restaurantes",
   "productName": "OptimaPOS Terminal",
   "author": {
@@ -107,8 +107,10 @@
       "category": "Office",
       "desktop": {
         "Name": "OptimaPOS Terminal",
-        "Comment": "App de escritorio para restaurantes"
-      }
+        "Comment": "App de escritorio para restaurantes",
+        "Exec": "optimapos-desktop --no-sandbox %U"
+      },
+      "afterInstall": "build/linux/after-install.sh"
     },
     "dmg": {
       "contents": [
