@@ -84,7 +84,7 @@
           "arch": ["x64", "arm64"]
         }
       ],
-      "icon": "build/icon.icns",
+      "icon": "build/icon.png",
       "category": "public.app-category.business"
     },
     "linux": {
