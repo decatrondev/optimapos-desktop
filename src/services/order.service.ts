@@ -8,14 +8,15 @@ async function getServerUrl(): Promise<string> {
     return import.meta.env.VITE_SOCKET_URL || '';
 }
 
-export async function fetchActiveOrders(token: string): Promise<Order[]> {
+export async function fetchActiveOrders(token: string, locationId?: number): Promise<Order[]> {
     const serverUrl = await getServerUrl();
     const activeStatuses: OrderStatus[] = ['PENDING', 'CONFIRMED', 'PREPARING', 'ON_THE_WAY', 'READY_PICKUP'];
     const allOrders: Order[] = [];
+    const locParam = locationId ? `&locationId=${locationId}` : '';
 
     const requests = activeStatuses.map(async (status) => {
         try {
-            const res = await fetch(`${serverUrl}/api/orders?status=${status}`, {
+            const res = await fetch(`${serverUrl}/api/orders?status=${status}${locParam}`, {
                 headers: { 'Authorization': `Bearer ${token}` },
             });
             if (!res.ok) return [];

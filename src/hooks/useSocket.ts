@@ -15,7 +15,7 @@ interface UseSocketReturn {
     clearPrintJob: (jobId: string) => void;
 }
 
-export function useSocket(socketUrl: string, token?: string | null): UseSocketReturn {
+export function useSocket(socketUrl: string, token?: string | null, locationId?: number): UseSocketReturn {
     const [orders, setOrders] = useState<Order[]>([]);
     const [isConnected, setIsConnected] = useState(false);
     const [hasNewAlert, setHasNewAlert] = useState(false);
@@ -32,6 +32,11 @@ export function useSocket(socketUrl: string, token?: string | null): UseSocketRe
         });
 
         const unsubOrder = socketService.onNewOrder((order) => {
+            // Filter by locationId if set (non-ADMIN users)
+            if (locationId && order.locationId && order.locationId !== locationId) {
+                console.log(`[Socket] Ignoring order #${order.id} from location ${order.locationId} (mine: ${locationId})`);
+                return;
+            }
             setOrders((prev) => {
                 if (prev.some(o => o.id === order.id)) return prev;
                 return [order, ...prev];
@@ -59,7 +64,7 @@ export function useSocket(socketUrl: string, token?: string | null): UseSocketRe
             socketService.disconnect();
             if (stopAlertRef.current) stopAlertRef.current();
         };
-    }, [socketUrl, token]);
+    }, [socketUrl, token, locationId]);
 
     const dismissAlert = useCallback(() => {
         setHasNewAlert(false);

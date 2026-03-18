@@ -37,7 +37,7 @@ const KitchenDashboard: React.FC<{
     const storeName = appConfig?.tenantName || 'OptimaPOS';
     const locationName = appConfig?.locationName || null;
 
-    const { orders, isConnected, hasNewAlert, printJobs, dismissAlert, updateOrderLocally, removeOrder, clearPrintJob } = useSocket(serverUrl, token);
+    const { orders, isConnected, hasNewAlert, printJobs, dismissAlert, updateOrderLocally, removeOrder, clearPrintJob } = useSocket(serverUrl, token, appConfig?.locationId || undefined);
     const [initialOrders, setInitialOrders] = useState<Order[]>([]);
     const [rules, setRules] = useState<PrintRule[]>([]);
     const [ticketPreview, setTicketPreview] = useState<{ order: Order; template: TicketTemplate } | null>(null);
@@ -66,8 +66,9 @@ const KitchenDashboard: React.FC<{
     useEffect(() => {
         if (!token || !canReadOrders) return;
 
-        fetchActiveOrders(token).then(fetched => {
-            console.log(`[Orders] Loaded ${fetched.length} active orders`);
+        const locId = appConfig?.locationId || undefined;
+        fetchActiveOrders(token, locId).then(fetched => {
+            console.log(`[Orders] Loaded ${fetched.length} active orders (location: ${locId})`);
             setInitialOrders(fetched);
         }).catch(e => console.error('[Orders] Load failed:', e));
 
