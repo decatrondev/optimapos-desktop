@@ -113,10 +113,13 @@ const OperationalView: React.FC<{
 
         loadOrders();
 
-        fetchRules(token).then(r => {
-            console.log(`[PrintConfig] Loaded ${r.length} rules`);
-            setRules(r);
-        }).catch(e => console.error('[PrintConfig] Load failed:', e));
+        // Only fetch print rules for roles that have printer_config access (not KITCHEN/DELIVERY)
+        if (userRole !== 'KITCHEN' && userRole !== 'DELIVERY') {
+            fetchRules(token).then(r => {
+                console.log(`[PrintConfig] Loaded ${r.length} rules`);
+                setRules(r);
+            }).catch(e => console.error('[PrintConfig] Load failed:', e));
+        }
     }, [token, userRole]);
 
     // Process print jobs
