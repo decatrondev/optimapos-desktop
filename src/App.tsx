@@ -16,7 +16,12 @@ import { ServerSetup } from './components/ServerSetup';
 import { LocationPicker } from './components/LocationPicker';
 import { Order, Location } from './types/order';
 import { PrintRule, TicketTemplate, PrintJob } from './types/printer-config';
-import { updateOrderStatus, getNextStatus, fetchActiveOrders } from './services/order.service';
+import {
+    updateOrderStatus, getNextStatus, fetchActiveOrders,
+    fetchKitchenOrders, fetchDeliveryOrders,
+    updateKitchenStatus as updateKitchenOrderStatus,
+    updateDeliveryStatus as updateDeliveryOrderStatus,
+} from './services/order.service';
 import { printTicket } from './services/printer.service';
 import { socketService } from './services/socket.service';
 import {
@@ -35,11 +40,15 @@ const OperationalView: React.FC<{
     canChangeLocation?: boolean;
 }> = ({ printerId, onResetPrinter, onChangeLocation, canChangeLocation }) => {
     const { user, token, logout, hasPermission, appConfig, locations } = useAuth();
-    // KITCHEN has kitchen_view, DELIVERY has delivery_view — both need to see orders
-    const canReadOrders = hasPermission('orders', 'read')
+    const userRole = user?.role || 'VENDOR';
+
+    // Determine permissions based on role — each role uses different backend endpoints
+    const canReadOrders = userRole === 'ADMIN' || userRole === 'MANAGER'
+        || hasPermission('orders', 'read')
         || hasPermission('kitchen_view', 'read')
         || hasPermission('delivery_view', 'read');
-    const canWriteOrders = hasPermission('orders', 'write')
+    const canWriteOrders = userRole === 'ADMIN' || userRole === 'MANAGER'
+        || hasPermission('orders', 'write')
         || hasPermission('kitchen_view', 'write')
         || hasPermission('delivery_view', 'write');
     const isAllLocations = appConfig?.locationId === -1;
@@ -49,7 +58,7 @@ const OperationalView: React.FC<{
     const locationName = appConfig?.locationName || null;
 
     // Default view based on role
-    const [activeView, setActiveView] = useState<ActiveView>(() => getDefaultView(user?.role || 'VENDOR'));
+    const [activeView, setActiveView] = useState<ActiveView>(() => getDefaultView(userRole));
 
     const socketLocId = appConfig?.locationId && appConfig.locationId > 0 ? appConfig.locationId : undefined;
     const { orders, isConnected, hasNewAlert, printJobs, dismissAlert, updateOrderLocally, removeOrder, clearPrintJob } = useSocket(serverUrl, token, socketLocId);
@@ -76,21 +85,39 @@ const OperationalView: React.FC<{
         });
     }, [isConnected, appConfig?.apiKey, appConfig?.tenantSlug, appConfig?.locationId, printerId]);
 
-    // Load active orders and print rules
+    // Load active orders using the correct endpoint for each role
     useEffect(() => {
-        if (!token || !canReadOrders) return;
+        if (!token) return;
 
         const locId = appConfig?.locationId && appConfig.locationId > 0 ? appConfig.locationId : undefined;
-        fetchActiveOrders(token, locId).then(fetched => {
-            console.log(`[Orders] Loaded ${fetched.length} active orders (location: ${locId ?? 'ALL'})`);
+
+        const loadOrders = async () => {
+            let fetched: Order[] = [];
+            try {
+                if (userRole === 'KITCHEN') {
+                    // Kitchen uses /api/orders/kitchen/active (requires kitchen_view:read)
+                    fetched = await fetchKitchenOrders(token, locId);
+                } else if (userRole === 'DELIVERY') {
+                    // Delivery uses /api/orders/delivery/active (requires delivery_view:read)
+                    fetched = await fetchDeliveryOrders(token, locId);
+                } else {
+                    // ADMIN, MANAGER, VENDOR use /api/orders (requires orders:read)
+                    fetched = await fetchActiveOrders(token, locId);
+                }
+                console.log(`[Orders] Loaded ${fetched.length} active orders (role: ${userRole}, location: ${locId ?? 'ALL'})`);
+            } catch (e) {
+                console.error('[Orders] Load failed:', e);
+            }
             setInitialOrders(fetched);
-        }).catch(e => console.error('[Orders] Load failed:', e));
+        };
+
+        loadOrders();
 
         fetchRules(token).then(r => {
             console.log(`[PrintConfig] Loaded ${r.length} rules`);
             setRules(r);
         }).catch(e => console.error('[PrintConfig] Load failed:', e));
-    }, [token, canReadOrders]);
+    }, [token, userRole]);
 
     // Process print jobs
     useEffect(() => {
@@ -120,10 +147,22 @@ const OperationalView: React.FC<{
         const nextStatus = getNextStatus(order.status, orderType);
         if (!nextStatus) return;
 
-        await updateOrderStatus(orderId, nextStatus, token);
+        // Use role-specific endpoint for status updates
+        if (userRole === 'KITCHEN') {
+            // Kitchen maps order status to kitchen status
+            const kitchenStatus = nextStatus === 'CONFIRMED' || nextStatus === 'PREPARING' ? 'PREPARING' : nextStatus === 'READY_PICKUP' || nextStatus === 'ON_THE_WAY' ? 'READY' : null;
+            if (kitchenStatus) {
+                await updateKitchenOrderStatus(orderId, kitchenStatus, token);
+            }
+        } else if (userRole === 'DELIVERY') {
+            await updateDeliveryOrderStatus(orderId, nextStatus, token);
+        } else {
+            await updateOrderStatus(orderId, nextStatus, token);
+        }
+
         updateOrderLocally(orderId, nextStatus);
         setInitialOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: nextStatus } : o));
-    }, [mergedOrders, token, updateOrderLocally]);
+    }, [mergedOrders, token, updateOrderLocally, userRole]);
 
     const handleRemove = useCallback((orderId: number) => {
         removeOrder(orderId);

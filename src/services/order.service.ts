@@ -35,6 +35,66 @@ export async function fetchActiveOrders(token: string, locationId?: number): Pro
     return allOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
+/** Fetch active kitchen orders — uses /api/orders/kitchen/active (requires kitchen_view:read) */
+export async function fetchKitchenOrders(token: string, locationId?: number): Promise<Order[]> {
+    const serverUrl = await getServerUrl();
+    const locParam = locationId ? `?locationId=${locationId}` : '';
+    try {
+        const res = await fetch(`${serverUrl}/api/orders/kitchen/active${locParam}`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+        });
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (Array.isArray(data) ? data : []) as Order[];
+    } catch {
+        return [];
+    }
+}
+
+/** Fetch active delivery orders — uses /api/orders/delivery/active (requires delivery_view:read) */
+export async function fetchDeliveryOrders(token: string, locationId?: number): Promise<Order[]> {
+    const serverUrl = await getServerUrl();
+    const locParam = locationId ? `?locationId=${locationId}` : '';
+    try {
+        const res = await fetch(`${serverUrl}/api/orders/delivery/active${locParam}`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+        });
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (Array.isArray(data) ? data : []) as Order[];
+    } catch {
+        return [];
+    }
+}
+
+/** Update kitchen order status — uses /api/orders/kitchen/:id/status (requires kitchen_view:write) */
+export async function updateKitchenStatus(orderId: number, status: string, token: string): Promise<void> {
+    const serverUrl = await getServerUrl();
+    const res = await fetch(`${serverUrl}/api/orders/kitchen/${orderId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ status }),
+    });
+    if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Error ${res.status}`);
+    }
+}
+
+/** Update delivery order status — uses /api/orders/delivery/:id/status (requires delivery_view:write) */
+export async function updateDeliveryStatus(orderId: number, status: string, token: string): Promise<void> {
+    const serverUrl = await getServerUrl();
+    const res = await fetch(`${serverUrl}/api/orders/delivery/${orderId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ status }),
+    });
+    if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Error ${res.status}`);
+    }
+}
+
 export async function updateOrderStatus(orderId: number, status: OrderStatus, token: string): Promise<void> {
     const serverUrl = await getServerUrl();
     const res = await fetch(`${serverUrl}/api/orders/${orderId}/status`, {
