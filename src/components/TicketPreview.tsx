@@ -9,6 +9,7 @@ interface TicketPreviewProps {
     order: Order;
     currencySymbol: string;
     storeName: string;
+    serverUrl?: string;
     onClose: () => void;
     onPrint: () => void;
 }
@@ -376,11 +377,11 @@ const TicketPaper: React.FC<{ width: number; children: React.ReactNode }> = ({ w
 // ─── Order-based Preview (legacy, used by manual print button) ───────────────
 
 export const TicketPreview: React.FC<TicketPreviewProps> = ({
-    template, order, currencySymbol, storeName, onClose, onPrint,
+    template, order, currencySymbol, storeName, serverUrl: serverUrlProp, onClose, onPrint,
 }) => {
     const vars = buildVariablesFromOrder(order, storeName);
     const elements = template.content?.elements || [];
-    const serverUrl = (import.meta as any).env?.VITE_SOCKET_URL || '';
+    const serverUrl = serverUrlProp || '';
 
     return (
         <div className="ticket-modal" onClick={onClose}>

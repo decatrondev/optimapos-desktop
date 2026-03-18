@@ -195,6 +195,7 @@ const KitchenDashboard: React.FC<{
                     order={ticketPreview.order}
                     currencySymbol={CURRENCY_SYMBOL}
                     storeName={storeName}
+                    serverUrl={serverUrl}
                     onClose={() => setTicketPreview(null)}
                     onPrint={handleTicketPrint}
                 />
