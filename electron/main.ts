@@ -7,6 +7,11 @@ import { autoUpdater } from 'electron-updater';
 
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
+// Linux: disable sandbox to avoid permission issues on VMs and some distros
+if (process.platform === 'linux') {
+    app.commandLine.appendSwitch('no-sandbox');
+}
+
 const isDev = process.env.NODE_ENV === 'development';
 let mainWindow: BrowserWindow | null = null;
 
