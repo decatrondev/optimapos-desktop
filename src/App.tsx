@@ -291,7 +291,6 @@ const OperationalView: React.FC<{
 
     return (
         <div className="app">
-            <UpdateBanner />
             <StatusBar
                 storeName={storeName}
                 locationName={locationName}
@@ -367,127 +366,137 @@ export const App: React.FC = () => {
         });
     }, []);
 
-    // ── Loading ──
-    if (isLoading || printerLoading) {
-        return (
-            <div className="app loading-screen">
-                <div className="loading-screen__content">
-                    <span className="loading-screen__icon">⚡</span>
-                    <div className="loading-screen__spinner" />
-                    <p className="loading-screen__text">OptimaPOS Terminal</p>
+    // ── Determine which screen to show ──
+    const renderContent = () => {
+        // Loading
+        if (isLoading || printerLoading) {
+            return (
+                <div className="app loading-screen">
+                    <div className="loading-screen__content">
+                        <span className="loading-screen__icon">⚡</span>
+                        <div className="loading-screen__spinner" />
+                        <p className="loading-screen__text">OptimaPOS Terminal</p>
+                    </div>
                 </div>
-            </div>
-        );
-    }
+            );
+        }
 
-    // ── Step 1: Server Setup (first time only) ──
-    if (!appConfig?.serverUrl) {
+        // Step 1: Server Setup
+        if (!appConfig?.serverUrl) {
+            return (
+                <ServerSetup
+                    onComplete={async (serverUrl, tenantSlug) => {
+                        await setAppConfig({ serverUrl, tenantSlug });
+                    }}
+                />
+            );
+        }
+
+        // Step 2: Login
+        if (!isAuthenticated) {
+            return (
+                <LoginScreen
+                    onLogin={login}
+                    error={error}
+                    isLoading={isLoading}
+                    storeName={appConfig?.tenantName || 'OptimaPOS'}
+                />
+            );
+        }
+
+        // Block CLIENT and SUPER_ADMIN roles
+        if (user?.role === 'CLIENT') {
+            return (
+                <div className="app">
+                    <div className="app__blocked-role">
+                        <span className="app__blocked-icon">🚫</span>
+                        <h2>Acceso restringido</h2>
+                        <p>Esta app es solo para personal del restaurante.</p>
+                        <button className="btn btn--advance" onClick={logout}>Cerrar sesión</button>
+                    </div>
+                </div>
+            );
+        }
+
+        if (user?.role === 'SUPER_ADMIN') {
+            return (
+                <div className="app">
+                    <div className="app__blocked-role">
+                        <span className="app__blocked-icon">🛡️</span>
+                        <h2>Super Admin</h2>
+                        <p>Usa el panel web para administración del sistema.</p>
+                        <button className="btn btn--advance" onClick={logout}>Cerrar sesión</button>
+                    </div>
+                </div>
+            );
+        }
+
+        // Step 3: Validate saved location
+        const isAdmin = user?.role === 'ADMIN' || user?.role === 'MANAGER';
+        const isAllLocations = appConfig?.locationId === -1;
+        const savedLocValid = isAllLocations
+            ? isAdmin
+            : appConfig?.locationId && locations.some(l => l.id === appConfig.locationId);
+
+        if (appConfig?.locationId && locations.length > 0 && !savedLocValid) {
+            setAppConfig({ locationId: undefined as any, locationName: undefined as any });
+        }
+
+        if (locations.length > 1 && !savedLocValid) {
+            return (
+                <LocationPicker
+                    locations={locations}
+                    storeName={appConfig?.tenantName || user?.name || 'OptimaPOS'}
+                    showAllOption={isAdmin}
+                    onSelectAll={async () => {
+                        await setAppConfig({ locationId: -1 as any, locationName: 'Todos los Locales' });
+                    }}
+                    onSelect={async (loc: Location) => {
+                        await setAppConfig({ locationId: loc.id, locationName: loc.name });
+                    }}
+                />
+            );
+        }
+
+        if (locations.length === 1 && !savedLocValid) {
+            setAppConfig({ locationId: locations[0].id, locationName: locations[0].name });
+        }
+
+        // Step 4: Printer setup
+        const needsPrinter = user?.role !== 'KITCHEN' && user?.role !== 'DELIVERY';
+        if (needsPrinter && printerId === null) {
+            return (
+                <PrinterSetup
+                    token={token!}
+                    storeName={appConfig?.tenantName || 'OptimaPOS'}
+                    locationId={appConfig?.locationId || undefined}
+                    onComplete={id => setPrinterId(id)}
+                    onSkip={() => setPrinterId(-1)}
+                    onLogout={logout}
+                />
+            );
+        }
+
+        // Step 5: Operational View
         return (
-            <ServerSetup
-                onComplete={async (serverUrl, tenantSlug) => {
-                    await setAppConfig({ serverUrl, tenantSlug });
+            <OperationalView
+                printerId={printerId ?? -1}
+                onResetPrinter={() => {
+                    setPrinterId(null);
+                    import('./services/printer-config.service').then(m => m.storePrinterId(null));
+                }}
+                canChangeLocation={locations.length > 1}
+                onChangeLocation={() => {
+                    setAppConfig({ locationId: undefined as any, locationName: undefined as any });
                 }}
             />
         );
-    }
+    };
 
-    // ── Step 2: Login ──
-    if (!isAuthenticated) {
-        return (
-            <LoginScreen
-                onLogin={login}
-                error={error}
-                isLoading={isLoading}
-                storeName={appConfig?.tenantName || 'OptimaPOS'}
-            />
-        );
-    }
-
-    // ── Block CLIENT and SUPER_ADMIN roles ──
-    if (user?.role === 'CLIENT') {
-        return (
-            <div className="app">
-                <div className="app__blocked-role">
-                    <span className="app__blocked-icon">🚫</span>
-                    <h2>Acceso restringido</h2>
-                    <p>Esta app es solo para personal del restaurante.</p>
-                    <button className="btn btn--advance" onClick={logout}>Cerrar sesión</button>
-                </div>
-            </div>
-        );
-    }
-
-    if (user?.role === 'SUPER_ADMIN') {
-        return (
-            <div className="app">
-                <div className="app__blocked-role">
-                    <span className="app__blocked-icon">🛡️</span>
-                    <h2>Super Admin</h2>
-                    <p>Usa el panel web para administración del sistema.</p>
-                    <button className="btn btn--advance" onClick={logout}>Cerrar sesión</button>
-                </div>
-            </div>
-        );
-    }
-
-    // ── Step 3: Validate saved location against user's allowed locations ──
-    const isAdmin = user?.role === 'ADMIN' || user?.role === 'MANAGER';
-    const isAllLocations = appConfig?.locationId === -1;
-    const savedLocValid = isAllLocations
-        ? isAdmin
-        : appConfig?.locationId && locations.some(l => l.id === appConfig.locationId);
-
-    if (appConfig?.locationId && locations.length > 0 && !savedLocValid) {
-        setAppConfig({ locationId: undefined as any, locationName: undefined as any });
-    }
-
-    if (locations.length > 1 && !savedLocValid) {
-        return (
-            <LocationPicker
-                locations={locations}
-                storeName={appConfig?.tenantName || user?.name || 'OptimaPOS'}
-                showAllOption={isAdmin}
-                onSelectAll={async () => {
-                    await setAppConfig({ locationId: -1 as any, locationName: 'Todos los Locales' });
-                }}
-                onSelect={async (loc: Location) => {
-                    await setAppConfig({ locationId: loc.id, locationName: loc.name });
-                }}
-            />
-        );
-    }
-
-    if (locations.length === 1 && !savedLocValid) {
-        setAppConfig({ locationId: locations[0].id, locationName: locations[0].name });
-    }
-
-    // ── Step 4: Printer setup (skip for KITCHEN and DELIVERY roles) ──
-    const needsPrinter = user?.role !== 'KITCHEN' && user?.role !== 'DELIVERY';
-    if (needsPrinter && printerId === null) {
-        return (
-            <PrinterSetup
-                token={token!}
-                storeName={appConfig?.tenantName || 'OptimaPOS'}
-                locationId={appConfig?.locationId || undefined}
-                onComplete={id => setPrinterId(id)}
-                onSkip={() => setPrinterId(-1)}
-                onLogout={logout}
-            />
-        );
-    }
-
-    // ── Step 5: Operational View (role-based) ──
     return (
-        <OperationalView
-            printerId={printerId ?? -1}
-            onResetPrinter={() => {
-                setPrinterId(null);
-                import('./services/printer-config.service').then(m => m.storePrinterId(null));
-            }}
-            canChangeLocation={locations.length > 1}
-            onChangeLocation={() => {
-                setAppConfig({ locationId: undefined as any, locationName: undefined as any });
-            }}
-        />
+        <>
+            <UpdateBanner />
+            {renderContent()}
+        </>
     );
 };
