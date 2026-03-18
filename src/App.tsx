@@ -3,6 +3,11 @@ import { useAuth } from './context/AuthContext';
 import { useSocket } from './hooks/useSocket';
 import { StatusBar } from './components/StatusBar';
 import { OrderQueue } from './components/OrderQueue';
+import { KitchenKanban } from './components/KitchenKanban';
+import { ManagerDashboard } from './components/ManagerDashboard';
+import { DeliveryView } from './components/DeliveryView';
+import { CashManagement } from './components/CashManagement';
+import { ViewNavBar, ActiveView, getDefaultView } from './components/ViewNavBar';
 import { AlertOverlay } from './components/AlertOverlay';
 import { LoginScreen } from './components/LoginScreen';
 import { PrinterSetup } from './components/PrinterSetup';
@@ -21,9 +26,9 @@ import {
 
 const CURRENCY_SYMBOL = 'S/';
 
-// ─── Kitchen Dashboard (main operational view) ──────────────────────────────
+// ─── Main Operational View (role-based) ─────────────────────────────────────
 
-const KitchenDashboard: React.FC<{
+const OperationalView: React.FC<{
     printerId: number;
     onResetPrinter: () => void;
     onChangeLocation?: () => void;
@@ -37,6 +42,9 @@ const KitchenDashboard: React.FC<{
     const serverUrl = appConfig?.serverUrl || '';
     const storeName = appConfig?.tenantName || 'OptimaPOS';
     const locationName = appConfig?.locationName || null;
+
+    // Default view based on role
+    const [activeView, setActiveView] = useState<ActiveView>(() => getDefaultView(user?.role || 'VENDOR'));
 
     const socketLocId = appConfig?.locationId && appConfig.locationId > 0 ? appConfig.locationId : undefined;
     const { orders, isConnected, hasNewAlert, printJobs, dismissAlert, updateOrderLocally, removeOrder, clearPrintJob } = useSocket(serverUrl, token, socketLocId);
@@ -56,7 +64,6 @@ const KitchenDashboard: React.FC<{
         ).then(resp => {
             if (resp.success) {
                 console.log('[App] Desktop socket authenticated');
-                // Set printer statuses for heartbeat
                 socketService.setPrinterStatuses([{ id: printerId, status: 'online' }]);
             } else {
                 console.warn('[App] Desktop socket auth failed:', resp.error);
@@ -80,7 +87,7 @@ const KitchenDashboard: React.FC<{
         }).catch(e => console.error('[PrintConfig] Load failed:', e));
     }, [token, canReadOrders]);
 
-    // Process print jobs: auto-print ones get acknowledged, manual ones show preview
+    // Process print jobs
     useEffect(() => {
         for (const job of printJobs) {
             if (job.rule.autoPrint) {
@@ -88,12 +95,9 @@ const KitchenDashboard: React.FC<{
                 clearPrintJob(job.jobId);
             }
         }
-        // Show first non-autoPrint job as preview if nothing is showing
         if (!activePrintJob) {
             const manualJob = printJobs.find(j => !j.rule.autoPrint);
-            if (manualJob) {
-                setActivePrintJob(manualJob);
-            }
+            if (manualJob) setActivePrintJob(manualJob);
         }
     }, [printJobs, clearPrintJob, activePrintJob]);
 
@@ -118,6 +122,7 @@ const KitchenDashboard: React.FC<{
 
     const handleRemove = useCallback((orderId: number) => {
         removeOrder(orderId);
+        setInitialOrders(prev => prev.filter(o => o.id !== orderId));
     }, [removeOrder]);
 
     const handlePrintTicket = useCallback(async (order: Order) => {
@@ -145,23 +150,23 @@ const KitchenDashboard: React.FC<{
         setTicketPreview(null);
     }, [ticketPreview]);
 
+    const locationMap = isAllLocations ? Object.fromEntries(locations.map(l => [l.id, l.name])) : undefined;
+    const activeCount = mergedOrders.filter(o => o.status !== 'DELIVERED' && o.status !== 'CANCELLED').length;
+    const deliveryCount = mergedOrders.filter(o => o.type === 'DELIVERY' && o.status !== 'DELIVERED' && o.status !== 'CANCELLED').length;
+    const kitchenCount = mergedOrders.filter(o => ['PENDING', 'CONFIRMED', 'PREPARING'].includes(o.status)).length;
     const latestOrder = orders[0];
 
-    return (
-        <div className="app">
-            <StatusBar
-                storeName={storeName}
-                locationName={locationName}
-                isConnected={isConnected}
-                orderCount={mergedOrders.filter(o => o.status !== 'DELIVERED' && o.status !== 'CANCELLED').length}
-                user={user}
-                onLogout={logout}
-                onSettings={onResetPrinter}
-                onChangeLocation={onChangeLocation}
-                canChangeLocation={canChangeLocation}
-            />
+    // Badges for nav
+    const badges: Partial<Record<ActiveView, number>> = {
+        kitchen: kitchenCount,
+        orders: activeCount,
+        delivery: deliveryCount,
+    };
 
-            {!canReadOrders ? (
+    // Render the active view content
+    const renderView = () => {
+        if (!canReadOrders) {
+            return (
                 <div className="app__no-permission">
                     <div style={{ textAlign: 'center', padding: '4rem 2rem' }}>
                         <span style={{ fontSize: '4rem' }}>🔒</span>
@@ -171,17 +176,91 @@ const KitchenDashboard: React.FC<{
                         </p>
                     </div>
                 </div>
-            ) : (
-                <OrderQueue
-                    orders={mergedOrders}
-                    currencySymbol={CURRENCY_SYMBOL}
-                    storeName={storeName}
-                    onAdvanceStatus={canWriteOrders ? handleAdvanceStatus : undefined}
-                    onRemove={handleRemove}
-                    onPrint={handlePrintTicket}
-                    locationMap={isAllLocations ? Object.fromEntries(locations.map(l => [l.id, l.name])) : undefined}
+            );
+        }
+
+        switch (activeView) {
+            case 'dashboard':
+                return (
+                    <ManagerDashboard
+                        token={token!}
+                        serverUrl={serverUrl}
+                        locationId={socketLocId}
+                        activeOrders={mergedOrders}
+                        onNavigate={setActiveView}
+                        currentView={activeView}
+                    />
+                );
+            case 'kitchen':
+                return (
+                    <KitchenKanban
+                        orders={mergedOrders}
+                        currencySymbol={CURRENCY_SYMBOL}
+                        onAdvanceStatus={canWriteOrders ? handleAdvanceStatus : undefined}
+                        onRemove={handleRemove}
+                        onPrint={handlePrintTicket}
+                        locationMap={locationMap}
+                    />
+                );
+            case 'delivery':
+                return (
+                    <DeliveryView
+                        orders={mergedOrders}
+                        token={token!}
+                        serverUrl={serverUrl}
+                        onAdvanceStatus={canWriteOrders ? handleAdvanceStatus : undefined}
+                        onPrint={handlePrintTicket}
+                        locationMap={locationMap}
+                    />
+                );
+            case 'cash':
+                return (
+                    <CashManagement
+                        token={token!}
+                        serverUrl={serverUrl}
+                        locationId={socketLocId}
+                    />
+                );
+            case 'orders':
+            default:
+                return (
+                    <OrderQueue
+                        orders={mergedOrders}
+                        currencySymbol={CURRENCY_SYMBOL}
+                        storeName={storeName}
+                        onAdvanceStatus={canWriteOrders ? handleAdvanceStatus : undefined}
+                        onRemove={handleRemove}
+                        onPrint={handlePrintTicket}
+                        locationMap={locationMap}
+                    />
+                );
+        }
+    };
+
+    return (
+        <div className="app">
+            <StatusBar
+                storeName={storeName}
+                locationName={locationName}
+                isConnected={isConnected}
+                orderCount={activeCount}
+                user={user}
+                onLogout={logout}
+                onSettings={onResetPrinter}
+                onChangeLocation={onChangeLocation}
+                canChangeLocation={canChangeLocation}
+            />
+
+            {user && (
+                <ViewNavBar
+                    currentView={activeView}
+                    onNavigate={setActiveView}
+                    userRole={user.role}
+                    badges={badges}
                 />
             )}
+
+            {renderView()}
 
             <AlertOverlay
                 visible={hasNewAlert}
@@ -271,19 +350,44 @@ export const App: React.FC = () => {
         );
     }
 
+    // ── Block CLIENT and SUPER_ADMIN roles ──
+    if (user?.role === 'CLIENT') {
+        return (
+            <div className="app">
+                <div className="app__blocked-role">
+                    <span className="app__blocked-icon">🚫</span>
+                    <h2>Acceso restringido</h2>
+                    <p>Esta app es solo para personal del restaurante.</p>
+                    <button className="btn btn--advance" onClick={logout}>Cerrar sesión</button>
+                </div>
+            </div>
+        );
+    }
+
+    if (user?.role === 'SUPER_ADMIN') {
+        return (
+            <div className="app">
+                <div className="app__blocked-role">
+                    <span className="app__blocked-icon">🛡️</span>
+                    <h2>Super Admin</h2>
+                    <p>Usa el panel web para administración del sistema.</p>
+                    <button className="btn btn--advance" onClick={logout}>Cerrar sesión</button>
+                </div>
+            </div>
+        );
+    }
+
     // ── Step 3: Validate saved location against user's allowed locations ──
     const isAdmin = user?.role === 'ADMIN' || user?.role === 'MANAGER';
     const isAllLocations = appConfig?.locationId === -1;
     const savedLocValid = isAllLocations
-        ? isAdmin // only ADMIN/MANAGER can use "all locations"
+        ? isAdmin
         : appConfig?.locationId && locations.some(l => l.id === appConfig.locationId);
 
-    // If saved locationId is NOT in user's locations, clear it
     if (appConfig?.locationId && locations.length > 0 && !savedLocValid) {
         setAppConfig({ locationId: undefined as any, locationName: undefined as any });
     }
 
-    // Show picker if 2+ locations and none selected (or invalid)
     if (locations.length > 1 && !savedLocValid) {
         return (
             <LocationPicker
@@ -300,13 +404,13 @@ export const App: React.FC = () => {
         );
     }
 
-    // Auto-select if only 1 location
     if (locations.length === 1 && !savedLocValid) {
         setAppConfig({ locationId: locations[0].id, locationName: locations[0].name });
     }
 
-    // ── Step 4: Printer setup ──
-    if (printerId === null) {
+    // ── Step 4: Printer setup (skip for KITCHEN and DELIVERY roles) ──
+    const needsPrinter = user?.role !== 'KITCHEN' && user?.role !== 'DELIVERY';
+    if (needsPrinter && printerId === null) {
         return (
             <PrinterSetup
                 token={token!}
@@ -319,10 +423,10 @@ export const App: React.FC = () => {
         );
     }
 
-    // ── Step 5: Dashboard ──
+    // ── Step 5: Operational View (role-based) ──
     return (
-        <KitchenDashboard
-            printerId={printerId}
+        <OperationalView
+            printerId={printerId ?? -1}
             onResetPrinter={() => {
                 setPrinterId(null);
                 import('./services/printer-config.service').then(m => m.storePrinterId(null));
