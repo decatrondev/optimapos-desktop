@@ -35,8 +35,13 @@ const OperationalView: React.FC<{
     canChangeLocation?: boolean;
 }> = ({ printerId, onResetPrinter, onChangeLocation, canChangeLocation }) => {
     const { user, token, logout, hasPermission, appConfig, locations } = useAuth();
-    const canReadOrders = hasPermission('orders', 'read');
-    const canWriteOrders = hasPermission('orders', 'write');
+    // KITCHEN has kitchen_view, DELIVERY has delivery_view — both need to see orders
+    const canReadOrders = hasPermission('orders', 'read')
+        || hasPermission('kitchen_view', 'read')
+        || hasPermission('delivery_view', 'read');
+    const canWriteOrders = hasPermission('orders', 'write')
+        || hasPermission('kitchen_view', 'write')
+        || hasPermission('delivery_view', 'write');
     const isAllLocations = appConfig?.locationId === -1;
 
     const serverUrl = appConfig?.serverUrl || '';
