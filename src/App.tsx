@@ -255,7 +255,7 @@ const OperationalView: React.FC<{
                         orders={mergedOrders}
                         token={token!}
                         serverUrl={serverUrl}
-                        onAdvanceStatus={canWriteOrders ? handleAdvanceStatus : undefined}
+                        locationId={socketLocId}
                         onPrint={handlePrintTicket}
                         locationMap={locationMap}
                     />
