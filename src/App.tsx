@@ -37,9 +37,10 @@ const CURRENCY_SYMBOL = 'S/';
 const OperationalView: React.FC<{
     printerId: number;
     onResetPrinter: () => void;
+    onChangeServer?: () => void;
     onChangeLocation?: () => void;
     canChangeLocation?: boolean;
-}> = ({ printerId, onResetPrinter, onChangeLocation, canChangeLocation }) => {
+}> = ({ printerId, onResetPrinter, onChangeServer, onChangeLocation, canChangeLocation }) => {
     const { user, token, logout, hasPermission, appConfig, locations } = useAuth();
     const userRole = user?.role || 'VENDOR';
 
@@ -299,6 +300,7 @@ const OperationalView: React.FC<{
                 user={user}
                 onLogout={logout}
                 onSettings={onResetPrinter}
+                onChangeServer={onChangeServer}
                 onChangeLocation={onChangeLocation}
                 canChangeLocation={canChangeLocation}
             />
@@ -366,6 +368,21 @@ export const App: React.FC = () => {
         });
     }, []);
 
+    // Reset server config — goes back to ServerSetup screen
+    const resetServer = useCallback(async () => {
+        await logout();
+        setPrinterId(null);
+        import('./services/printer-config.service').then(m => m.storePrinterId(null));
+        await setAppConfig({
+            serverUrl: '' as any,
+            tenantSlug: '' as any,
+            tenantName: '' as any,
+            locationId: undefined as any,
+            locationName: undefined as any,
+            apiKey: undefined as any,
+        });
+    }, [logout, setAppConfig]);
+
     // ── Determine which screen to show ──
     const renderContent = () => {
         // Loading
@@ -400,6 +417,7 @@ export const App: React.FC = () => {
                     error={error}
                     isLoading={isLoading}
                     storeName={appConfig?.tenantName || 'OptimaPOS'}
+                    onChangeServer={resetServer}
                 />
             );
         }
@@ -485,6 +503,7 @@ export const App: React.FC = () => {
                     setPrinterId(null);
                     import('./services/printer-config.service').then(m => m.storePrinterId(null));
                 }}
+                onChangeServer={resetServer}
                 canChangeLocation={locations.length > 1}
                 onChangeLocation={() => {
                     setAppConfig({ locationId: undefined as any, locationName: undefined as any });

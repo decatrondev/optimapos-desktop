@@ -1190,6 +1190,22 @@ body::before {
   color: var(--text-muted);
 }
 
+.login-card__change-server {
+  display: block;
+  margin: 0 auto 16px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  cursor: pointer;
+  text-decoration: underline;
+  transition: color 0.2s;
+}
+
+.login-card__change-server:hover {
+  color: var(--text-primary);
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);

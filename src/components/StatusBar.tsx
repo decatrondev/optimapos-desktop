@@ -10,6 +10,7 @@ interface StatusBarProps {
     user: AuthUser | null;
     onLogout?: () => void;
     onSettings?: () => void;
+    onChangeServer?: () => void;
     onChangeLocation?: () => void;
     canChangeLocation?: boolean;
 }
@@ -26,7 +27,7 @@ function getRoleBadge(role: string): { label: string; className: string } {
 }
 
 export const StatusBar: React.FC<StatusBarProps> = ({
-    storeName, locationName, isConnected, orderCount, user, onLogout, onSettings, onChangeLocation, canChangeLocation,
+    storeName, locationName, isConnected, orderCount, user, onLogout, onSettings, onChangeServer, onChangeLocation, canChangeLocation,
 }) => {
     const time = useClock();
     const roleBadge = user ? getRoleBadge(user.role) : null;
@@ -65,8 +66,13 @@ export const StatusBar: React.FC<StatusBarProps> = ({
                             </span>
                         )}
                         {onSettings && (
-                            <button className="btn btn--logout" onClick={onSettings} title="Configuración">
-                                ⚙️
+                            <button className="btn btn--logout" onClick={onSettings} title="Cambiar impresora">
+                                🖨️
+                            </button>
+                        )}
+                        {onChangeServer && (
+                            <button className="btn btn--logout" onClick={onChangeServer} title="Cambiar servidor">
+                                🌐
                             </button>
                         )}
                         {onLogout && (

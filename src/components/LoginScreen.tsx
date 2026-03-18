@@ -5,9 +5,10 @@ interface LoginScreenProps {
     error: string | null;
     isLoading: boolean;
     storeName: string;
+    onChangeServer?: () => void;
 }
 
-export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, error, isLoading, storeName }) => {
+export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, error, isLoading, storeName, onChangeServer }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -110,6 +111,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, error, isLoad
                 </form>
 
                 <p className="login-card__footer">Solo personal autorizado</p>
+
+                {onChangeServer && (
+                    <button
+                        type="button"
+                        className="login-card__change-server"
+                        onClick={onChangeServer}
+                    >
+                        Cambiar servidor
+                    </button>
+                )}
             </div>
         </div>
     );
