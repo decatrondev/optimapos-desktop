@@ -52,6 +52,9 @@ export const CashManagement: React.FC<CashManagementProps> = ({ token, serverUrl
                 headers: { 'Authorization': `Bearer ${token}` },
             });
             if (!res.ok) {
+                if (res.status === 403) {
+                    setError('Sin permisos para gestionar caja. Contacta al administrador.');
+                }
                 setCurrentRegister(null);
                 setMovements([]);
                 setLoading(false);
