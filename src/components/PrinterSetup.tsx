@@ -5,10 +5,11 @@ import { fetchPrinters, storePrinterId } from '../services/printer-config.servic
 interface PrinterSetupProps {
     token: string;
     storeName: string;
+    locationId?: number;
     onComplete: (printerId: number) => void;
 }
 
-export const PrinterSetup: React.FC<PrinterSetupProps> = ({ token, storeName, onComplete }) => {
+export const PrinterSetup: React.FC<PrinterSetupProps> = ({ token, storeName, locationId, onComplete }) => {
     const [printers, setPrinters] = useState<Printer[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -16,7 +17,7 @@ export const PrinterSetup: React.FC<PrinterSetupProps> = ({ token, storeName, on
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
-        fetchPrinters(token)
+        fetchPrinters(token, locationId)
             .then((data) => {
                 const active = data.filter((p) => p.isActive);
                 setPrinters(active);

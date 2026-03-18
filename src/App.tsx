@@ -299,6 +299,7 @@ export const App: React.FC = () => {
             <PrinterSetup
                 token={token!}
                 storeName={appConfig?.tenantName || 'OptimaPOS'}
+                locationId={appConfig?.locationId || undefined}
                 onComplete={id => setPrinterId(id)}
             />
         );

@@ -26,9 +26,10 @@ export async function fetchDesktopConfig(apiKey: string, tenantSlug: string, loc
 
 // ─── JWT-authenticated API (legacy, used during setup) ───────────────────────
 
-export async function fetchPrinters(token: string): Promise<Printer[]> {
+export async function fetchPrinters(token: string, locationId?: number): Promise<Printer[]> {
     const serverUrl = await getServerUrl();
-    const res = await fetch(`${serverUrl}/api/printer-config/printers`, {
+    const locParam = locationId ? `?locationId=${locationId}` : '';
+    const res = await fetch(`${serverUrl}/api/printer-config/printers${locParam}`, {
         headers: { 'Authorization': `Bearer ${token}` },
     });
     if (!res.ok) throw new Error(`Error ${res.status}`);
