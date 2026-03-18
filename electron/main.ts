@@ -1,12 +1,20 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as dotenv from 'dotenv';
+import log from 'electron-log';
+import { autoUpdater } from 'electron-updater';
 
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 const isDev = process.env.NODE_ENV === 'development';
 let mainWindow: BrowserWindow | null = null;
+
+// ─── Logging ────────────────────────────────────────────────────────────────
+
+log.transports.file.level = 'info';
+autoUpdater.logger = log;
+log.info('OptimaPOS Terminal starting...');
 
 // ─── Persistent Storage Paths ────────────────────────────────────────────────
 
@@ -95,6 +103,85 @@ function createWindow(): void {
     });
 }
 
+// ─── Auto-Updater ───────────────────────────────────────────────────────────
+
+function setupAutoUpdater(): void {
+    if (isDev) {
+        log.info('[Updater] Skipping auto-update in dev mode');
+        return;
+    }
+
+    // Don't auto-download — let user decide
+    autoUpdater.autoDownload = false;
+    autoUpdater.autoInstallOnAppQuit = true;
+
+    autoUpdater.on('checking-for-update', () => {
+        log.info('[Updater] Checking for updates...');
+        sendToRenderer('updater-status', { status: 'checking' });
+    });
+
+    autoUpdater.on('update-available', (info) => {
+        log.info(`[Updater] Update available: v${info.version}`);
+        sendToRenderer('updater-status', {
+            status: 'available',
+            version: info.version,
+            releaseNotes: info.releaseNotes,
+            releaseDate: info.releaseDate,
+        });
+    });
+
+    autoUpdater.on('update-not-available', () => {
+        log.info('[Updater] Already up to date');
+        sendToRenderer('updater-status', { status: 'up-to-date' });
+    });
+
+    autoUpdater.on('download-progress', (progress) => {
+        sendToRenderer('updater-status', {
+            status: 'downloading',
+            percent: Math.round(progress.percent),
+            transferred: progress.transferred,
+            total: progress.total,
+            bytesPerSecond: progress.bytesPerSecond,
+        });
+    });
+
+    autoUpdater.on('update-downloaded', (info) => {
+        log.info(`[Updater] Update downloaded: v${info.version}`);
+        sendToRenderer('updater-status', {
+            status: 'ready',
+            version: info.version,
+        });
+    });
+
+    autoUpdater.on('error', (error) => {
+        log.error('[Updater] Error:', error);
+        sendToRenderer('updater-status', {
+            status: 'error',
+            message: error.message,
+        });
+    });
+
+    // Check for updates 5 seconds after app starts
+    setTimeout(() => {
+        autoUpdater.checkForUpdates().catch(err => {
+            log.error('[Updater] Check failed:', err);
+        });
+    }, 5000);
+
+    // Then check every 30 minutes
+    setInterval(() => {
+        autoUpdater.checkForUpdates().catch(err => {
+            log.error('[Updater] Periodic check failed:', err);
+        });
+    }, 30 * 60 * 1000);
+}
+
+function sendToRenderer(channel: string, data: any): void {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(channel, data);
+    }
+}
+
 // ─── IPC Handlers ────────────────────────────────────────────────────────────
 
 // Config management
@@ -158,10 +245,43 @@ ipcMain.handle('print-ticket', async (_event, ticketText: string, fileName: stri
     }
 });
 
+// ─── Updater IPC ─────────────────────────────────────────────────────────────
+
+ipcMain.handle('updater-download', async () => {
+    log.info('[Updater] User requested download');
+    try {
+        await autoUpdater.downloadUpdate();
+        return { success: true };
+    } catch (err: any) {
+        log.error('[Updater] Download failed:', err);
+        return { success: false, error: err.message };
+    }
+});
+
+ipcMain.handle('updater-install', async () => {
+    log.info('[Updater] User requested install — quitting and installing');
+    autoUpdater.quitAndInstall(false, true);
+});
+
+ipcMain.handle('updater-check', async () => {
+    log.info('[Updater] Manual check requested');
+    try {
+        const result = await autoUpdater.checkForUpdates();
+        return { success: true, version: result?.updateInfo?.version };
+    } catch (err: any) {
+        return { success: false, error: err.message };
+    }
+});
+
+ipcMain.handle('get-app-version', async () => {
+    return app.getVersion();
+});
+
 // ─── App Lifecycle ───────────────────────────────────────────────────────────
 
 app.whenReady().then(() => {
     createWindow();
+    setupAutoUpdater();
 
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {

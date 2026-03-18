@@ -8,6 +8,7 @@ import { ManagerDashboard } from './components/ManagerDashboard';
 import { DeliveryView } from './components/DeliveryView';
 import { CashManagement } from './components/CashManagement';
 import { ViewNavBar, ActiveView, getDefaultView } from './components/ViewNavBar';
+import { UpdateBanner } from './components/UpdateBanner';
 import { AlertOverlay } from './components/AlertOverlay';
 import { LoginScreen } from './components/LoginScreen';
 import { PrinterSetup } from './components/PrinterSetup';
@@ -290,6 +291,7 @@ const OperationalView: React.FC<{
 
     return (
         <div className="app">
+            <UpdateBanner />
             <StatusBar
                 storeName={storeName}
                 locationName={locationName}

@@ -20,4 +20,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // Ticket file output
     printTicket: (ticketText: string, fileName: string): Promise<{ success: boolean; path?: string; error?: string }> =>
         ipcRenderer.invoke('print-ticket', ticketText, fileName),
+
+    // Auto-Updater
+    getAppVersion: (): Promise<string> => ipcRenderer.invoke('get-app-version'),
+    updaterCheck: (): Promise<{ success: boolean; version?: string; error?: string }> =>
+        ipcRenderer.invoke('updater-check'),
+    updaterDownload: (): Promise<{ success: boolean; error?: string }> =>
+        ipcRenderer.invoke('updater-download'),
+    updaterInstall: (): Promise<void> => ipcRenderer.invoke('updater-install'),
+    onUpdaterStatus: (callback: (data: any) => void): (() => void) => {
+        const handler = (_event: any, data: any) => callback(data);
+        ipcRenderer.on('updater-status', handler);
+        return () => ipcRenderer.removeListener('updater-status', handler);
+    },
 });

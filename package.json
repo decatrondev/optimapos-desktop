@@ -1,6 +1,6 @@
 {
   "name": "optimapos-desktop",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "OptimaPOS Terminal — App de escritorio para restaurantes",
   "productName": "OptimaPOS Terminal",
   "main": "dist-electron/main.js",
@@ -10,10 +10,18 @@
     "dev:electron": "tsc -p tsconfig.electron.json && cross-env NODE_ENV=development electron .",
     "build": "tsc && vite build && tsc -p tsconfig.electron.json",
     "start": "electron .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "pack": "npm run build && electron-builder --dir",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:linux": "npm run build && electron-builder --linux",
+    "dist:all": "npm run build && electron-builder --win --mac --linux",
+    "publish": "npm run build && electron-builder --win --mac --linux --publish always"
   },
   "dependencies": {
     "dotenv": "^16.4.7",
+    "electron-log": "^5.4.3",
+    "electron-updater": "^6.8.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "socket.io-client": "^4.7.5"
@@ -32,16 +40,76 @@
   "build": {
     "appId": "net.decatron.optimapos",
     "productName": "OptimaPOS Terminal",
+    "copyright": "Copyright © 2026 Decatron",
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*"
+    ],
+    "publish": {
+      "provider": "github",
+      "owner": "decagraff",
+      "repo": "optimapos-desktop",
+      "releaseType": "release"
     },
     "win": {
-      "target": ["nsis", "portable"]
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "build/icon.png"
     },
     "nsis": {
       "oneClick": false,
       "perMachine": true,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "shortcutName": "OptimaPOS Terminal"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        }
+      ],
+      "icon": "build/icon.icns",
+      "category": "public.app-category.business"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": ["x64"]
+        },
+        {
+          "target": "deb",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "build/icon.png",
+      "category": "Office",
+      "desktop": {
+        "Name": "OptimaPOS Terminal",
+        "Comment": "App de escritorio para restaurantes"
+      }
+    },
+    "dmg": {
+      "contents": [
+        { "x": 130, "y": 220 },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+      ]
     }
   }
 }
