@@ -52,7 +52,7 @@
     "publish": {
       "provider": "github",
       "owner": "decagraff",
-      "repo": "optimapos-desktop",
+      "repo": "optimapos",
       "releaseType": "release"
     },
     "win": {
