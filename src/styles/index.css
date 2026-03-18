@@ -2919,6 +2919,196 @@ body::before {
   min-width: 180px;
 }
 
+/* KPI Grid */
+.cash-mgmt__kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.cash-mgmt__kpi-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  text-align: center;
+}
+
+.cash-mgmt__kpi-label {
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+}
+
+.cash-mgmt__kpi-value {
+  font-family: var(--font-mono);
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.cash-mgmt__kpi-value--cash {
+  color: var(--accent-success);
+}
+
+.cash-mgmt__kpi-value--digital {
+  color: var(--accent-info);
+}
+
+.cash-mgmt__kpi-value--expected {
+  color: var(--accent-primary);
+}
+
+.cash-mgmt__kpi-sub {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+}
+
+/* Payment methods breakdown */
+.cash-mgmt__payment-methods {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cash-mgmt__payment-method-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+  margin-bottom: 4px;
+}
+
+.cash-mgmt__payment-method-name {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.cash-mgmt__payment-method-detail {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.cash-mgmt__payment-method-bar {
+  height: 6px;
+  background: var(--bg-primary);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.cash-mgmt__payment-method-bar-fill {
+  height: 100%;
+  background: var(--accent-primary);
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+/* Movements summary inline */
+.cash-mgmt__mov-summary {
+  float: right;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+/* Close summary breakdown */
+.cash-mgmt__close-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  background: var(--bg-primary);
+  border-radius: var(--radius-sm);
+  margin-bottom: 16px;
+  font-size: 0.8rem;
+}
+
+.cash-mgmt__close-summary-row {
+  display: flex;
+  justify-content: space-between;
+  color: var(--text-secondary);
+}
+
+.cash-mgmt__close-summary-row--plus span:last-child {
+  color: var(--accent-success);
+}
+
+.cash-mgmt__close-summary-row--minus span:last-child {
+  color: var(--accent-danger);
+}
+
+.cash-mgmt__close-summary-row--total {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 8px;
+  margin-top: 4px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* Close diff indicator */
+.cash-mgmt__close-diff {
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.cash-mgmt__close-diff--ok {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.25);
+  color: #86efac;
+}
+
+.cash-mgmt__close-diff--over {
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  color: #93c5fd;
+}
+
+.cash-mgmt__close-diff--under {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #fca5a5;
+}
+
+/* Close actions row */
+.cash-mgmt__close-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.cash-mgmt__cancel-btn {
+  flex: 1;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-card);
+  color: var(--text-secondary);
+}
+
+.cash-mgmt__close-actions .cash-mgmt__submit {
+  flex: 1;
+}
+
+.cash-mgmt__close-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .cash-mgmt__kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    BLOCKED ROLE SCREEN
    ═══════════════════════════════════════════════════════════════════════════ */
