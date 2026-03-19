@@ -121,39 +121,51 @@ export function printViaUSB(
             // Windows: Write a temp .ps1 script that uses Spooler API with RAW datatype
             const psScript = require('path').join(os.tmpdir(), `optimapos-rawprint-${Date.now()}.ps1`);
             const escapedPrinter = resolvedName.replace(/'/g, "''");
-            const escapedFile = tmpFile.replace(/\\/g, '\\\\');
+            const escapedFile = tmpFile.replace(/'/g, "''");
 
-            const scriptContent = `
-Add-Type -TypeDefinition @"
-using System;
-using System.Runtime.InteropServices;
-public class RawPrint {
-    [StructLayout(LayoutKind.Sequential)] public struct DOCINFOA {
-        [MarshalAs(UnmanagedType.LPStr)] public string N;
-        [MarshalAs(UnmanagedType.LPStr)] public string O;
-        [MarshalAs(UnmanagedType.LPStr)] public string D;
-    }
-    [DllImport("winspool.drv",SetLastError=true,CharSet=CharSet.Ansi)] public static extern bool OpenPrinter(string p,out IntPtr h,IntPtr d);
-    [DllImport("winspool.drv",SetLastError=true,CharSet=CharSet.Ansi)] public static extern bool StartDocPrinter(IntPtr h,int l,ref DOCINFOA di);
-    [DllImport("winspool.drv",SetLastError=true)] public static extern bool StartPagePrinter(IntPtr h);
-    [DllImport("winspool.drv",SetLastError=true)] public static extern bool WritePrinter(IntPtr h,IntPtr b,int c,out int w);
-    [DllImport("winspool.drv",SetLastError=true)] public static extern bool EndPagePrinter(IntPtr h);
-    [DllImport("winspool.drv",SetLastError=true)] public static extern bool EndDocPrinter(IntPtr h);
-    [DllImport("winspool.drv",SetLastError=true)] public static extern bool ClosePrinter(IntPtr h);
-    public static bool Send(string name, byte[] data) {
-        IntPtr h; DOCINFOA di = new DOCINFOA(); di.N = "OptimaPOS"; di.D = "RAW";
-        if (!OpenPrinter(name, out h, IntPtr.Zero)) return false;
-        if (!StartDocPrinter(h, 1, ref di)) { ClosePrinter(h); return false; }
-        if (!StartPagePrinter(h)) { EndDocPrinter(h); ClosePrinter(h); return false; }
-        IntPtr p = Marshal.AllocCoTaskMem(data.Length); Marshal.Copy(data, 0, p, data.Length); int w;
-        bool ok = WritePrinter(h, p, data.Length, out w); Marshal.FreeCoTaskMem(p);
-        EndPagePrinter(h); EndDocPrinter(h); ClosePrinter(h); return ok;
-    }
-}
-"@
-\\$ok = [RawPrint]::Send('${escapedPrinter}', [System.IO.File]::ReadAllBytes('${escapedFile}'))
-if (-not \\$ok) { exit 1 }
-`;
+            const csCode = [
+                'using System;',
+                'using System.Runtime.InteropServices;',
+                'public class RawPrint {',
+                '  [StructLayout(LayoutKind.Sequential)] public struct DOCINFOA {',
+                '    [MarshalAs(UnmanagedType.LPStr)] public string N;',
+                '    [MarshalAs(UnmanagedType.LPStr)] public string O;',
+                '    [MarshalAs(UnmanagedType.LPStr)] public string D;',
+                '  }',
+                '  [DllImport("winspool.drv",SetLastError=true,CharSet=CharSet.Ansi)] public static extern bool OpenPrinter(string p,out IntPtr h,IntPtr d);',
+                '  [DllImport("winspool.drv",SetLastError=true,CharSet=CharSet.Ansi)] public static extern bool StartDocPrinter(IntPtr h,int l,ref DOCINFOA di);',
+                '  [DllImport("winspool.drv",SetLastError=true)] public static extern bool StartPagePrinter(IntPtr h);',
+                '  [DllImport("winspool.drv",SetLastError=true)] public static extern bool WritePrinter(IntPtr h,IntPtr b,int c,out int w);',
+                '  [DllImport("winspool.drv",SetLastError=true)] public static extern bool EndPagePrinter(IntPtr h);',
+                '  [DllImport("winspool.drv",SetLastError=true)] public static extern bool EndDocPrinter(IntPtr h);',
+                '  [DllImport("winspool.drv",SetLastError=true)] public static extern bool ClosePrinter(IntPtr h);',
+                '  public static bool Send(string name, byte[] data) {',
+                '    IntPtr h; DOCINFOA di = new DOCINFOA(); di.N = "OptimaPOS"; di.D = "RAW";',
+                '    if (!OpenPrinter(name, out h, IntPtr.Zero)) return false;',
+                '    if (!StartDocPrinter(h, 1, ref di)) { ClosePrinter(h); return false; }',
+                '    if (!StartPagePrinter(h)) { EndDocPrinter(h); ClosePrinter(h); return false; }',
+                '    IntPtr p = Marshal.AllocCoTaskMem(data.Length); Marshal.Copy(data, 0, p, data.Length); int w;',
+                '    bool ok = WritePrinter(h, p, data.Length, out w); Marshal.FreeCoTaskMem(p);',
+                '    EndPagePrinter(h); EndDocPrinter(h); ClosePrinter(h); return ok;',
+                '  }',
+                '}',
+            ].join('\r\n');
+
+            // Write C# code to a temp .cs file, then reference it from the script
+            const csFile = require('path').join(os.tmpdir(), `optimapos-rawprint-${Date.now()}.cs`);
+            try {
+                require('fs').writeFileSync(csFile, csCode, 'utf-8');
+            } catch (err: any) {
+                return resolve({ success: false, error: `Error writing cs file: ${err.message}` });
+            }
+
+            const scriptLines = [
+                '$csCode = [System.IO.File]::ReadAllText(\'' + csFile.replace(/'/g, "''") + '\')',
+                'Add-Type -TypeDefinition $csCode',
+                '$ok = [RawPrint]::Send(\'' + escapedPrinter + '\', [System.IO.File]::ReadAllBytes(\'' + escapedFile + '\'))',
+                'if (-not $ok) { exit 1 }',
+            ];
+            const scriptContent = scriptLines.join('\r\n');
             try {
                 require('fs').writeFileSync(psScript, scriptContent, 'utf-8');
             } catch (err: any) {
@@ -162,6 +174,7 @@ if (-not \\$ok) { exit 1 }
 
             exec(`powershell -NoProfile -ExecutionPolicy Bypass -File "${psScript}"`, { timeout: 15000 }, (error, _stdout, stderr) => {
                 try { require('fs').unlinkSync(psScript); } catch {}
+                try { require('fs').unlinkSync(csFile); } catch {}
                 try { require('fs').unlinkSync(tmpFile); } catch {}
 
                 if (error) {
