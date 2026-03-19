@@ -424,8 +424,10 @@ function renderText(el: TemplateElement, vars: Record<string, string>, lw: numbe
     return bytes;
 }
 
-/** Wrap text to fit within a given character width */
+/** Wrap text to fit within a given character width.
+ *  Tries word boundary first; if a single word exceeds maxWidth, cuts by letter. */
 function wrapText(text: string, maxWidth: number): string[] {
+    if (maxWidth <= 0) return [text];
     if (text.length <= maxWidth) return [text];
     const result: string[] = [];
     let remaining = text;
@@ -434,11 +436,16 @@ function wrapText(text: string, maxWidth: number): string[] {
             result.push(remaining);
             break;
         }
-        // Try to break at last space within maxWidth
         let breakAt = remaining.lastIndexOf(' ', maxWidth);
-        if (breakAt <= 0) breakAt = maxWidth;
-        result.push(remaining.substring(0, breakAt));
-        remaining = remaining.substring(breakAt).trimStart();
+        if (breakAt <= 0) {
+            // No space — force cut at maxWidth (letter-level)
+            breakAt = maxWidth;
+            result.push(remaining.substring(0, breakAt));
+            remaining = remaining.substring(breakAt);
+        } else {
+            result.push(remaining.substring(0, breakAt));
+            remaining = remaining.substring(breakAt + 1); // skip the space
+        }
     }
     return result;
 }
