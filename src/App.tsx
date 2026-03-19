@@ -7,7 +7,7 @@ import { KitchenKanban } from './components/KitchenKanban';
 import { ManagerDashboard } from './components/ManagerDashboard';
 import { DeliveryView } from './components/DeliveryView';
 import { CashManagement } from './components/CashManagement';
-import { ViewNavBar, ActiveView, getDefaultView } from './components/ViewNavBar';
+import { ViewNavBar, ActiveView, getDefaultView, VIEW_PERMISSIONS } from './components/ViewNavBar';
 import { UpdateBanner } from './components/UpdateBanner';
 import { AlertOverlay } from './components/AlertOverlay';
 import { LoginScreen } from './components/LoginScreen';
@@ -45,15 +45,9 @@ const OperationalView: React.FC<{
     const { user, token, logout, hasPermission, appConfig, locations } = useAuth();
     const userRole = user?.role || 'VENDOR';
 
-    // Determine permissions based on role — each role uses different backend endpoints
-    const canReadOrders = userRole === 'ADMIN' || userRole === 'MANAGER'
-        || hasPermission('orders', 'read')
-        || hasPermission('kitchen_view', 'read')
-        || hasPermission('delivery_view', 'read');
-    const canWriteOrders = userRole === 'ADMIN' || userRole === 'MANAGER'
-        || hasPermission('orders', 'write')
-        || hasPermission('kitchen_view', 'write')
-        || hasPermission('delivery_view', 'write');
+    // Per-view permission check helper
+    const canView = (view: ActiveView): boolean => hasPermission(VIEW_PERMISSIONS[view], 'read');
+    const canWrite = (view: ActiveView): boolean => hasPermission(VIEW_PERMISSIONS[view], 'write');
     const isAllLocations = appConfig?.locationId === -1;
 
     const serverUrl = appConfig?.serverUrl || '';
@@ -246,24 +240,24 @@ const OperationalView: React.FC<{
         delivery: deliveryCount,
     };
 
-    // Render the active view content
-    const renderView = () => {
-        if (!canReadOrders) {
-            return (
-                <div className="app__no-permission">
-                    <div style={{ textAlign: 'center', padding: '4rem 2rem' }}>
-                        <span style={{ fontSize: '4rem' }}>🔒</span>
-                        <h2 style={{ marginTop: '1rem', fontSize: '1.5rem', color: '#fff' }}>Sin permisos</h2>
-                        <p style={{ marginTop: '0.5rem', color: '#999', maxWidth: '400px', margin: '0.5rem auto 0' }}>
-                            Tu cuenta no tiene permisos para ver pedidos. Contacta al administrador.
-                        </p>
-                    </div>
-                </div>
-            );
-        }
+    // No-permission fallback
+    const noPermissionScreen = (viewLabel: string) => (
+        <div className="app__no-permission">
+            <div style={{ textAlign: 'center', padding: '4rem 2rem' }}>
+                <span style={{ fontSize: '4rem' }}>🔒</span>
+                <h2 style={{ marginTop: '1rem', fontSize: '1.5rem', color: '#fff' }}>Sin permisos</h2>
+                <p style={{ marginTop: '0.5rem', color: '#999', maxWidth: '400px', margin: '0.5rem auto 0' }}>
+                    No tienes acceso a {viewLabel}. Contacta al administrador.
+                </p>
+            </div>
+        </div>
+    );
 
+    // Render the active view content with per-view permission checks
+    const renderView = () => {
         switch (activeView) {
             case 'dashboard':
+                if (!canView('dashboard')) return noPermissionScreen('el dashboard');
                 return (
                     <ManagerDashboard
                         token={token!}
@@ -275,17 +269,19 @@ const OperationalView: React.FC<{
                     />
                 );
             case 'kitchen':
+                if (!canView('kitchen')) return noPermissionScreen('la cocina');
                 return (
                     <KitchenKanban
                         orders={mergedOrders}
                         currencySymbol={CURRENCY_SYMBOL}
-                        onAdvanceStatus={canWriteOrders ? handleAdvanceStatus : undefined}
+                        onAdvanceStatus={canWrite('kitchen') ? handleAdvanceStatus : undefined}
                         onRemove={handleRemove}
                         onPrint={handlePrintTicket}
                         locationMap={locationMap}
                     />
                 );
             case 'delivery':
+                if (!canView('delivery')) return noPermissionScreen('delivery');
                 return (
                     <DeliveryView
                         orders={mergedOrders}
@@ -297,6 +293,7 @@ const OperationalView: React.FC<{
                     />
                 );
             case 'cash':
+                if (!canView('cash')) return noPermissionScreen('la caja');
                 return (
                     <CashManagement
                         token={token!}
@@ -306,12 +303,13 @@ const OperationalView: React.FC<{
                 );
             case 'orders':
             default:
+                if (!canView('orders')) return noPermissionScreen('los pedidos');
                 return (
                     <OrderQueue
                         orders={mergedOrders}
                         currencySymbol={CURRENCY_SYMBOL}
                         storeName={storeName}
-                        onAdvanceStatus={canWriteOrders ? handleAdvanceStatus : undefined}
+                        onAdvanceStatus={canWrite('orders') ? handleAdvanceStatus : undefined}
                         onRemove={handleRemove}
                         onPrint={handlePrintTicket}
                         locationMap={locationMap}
@@ -341,6 +339,7 @@ const OperationalView: React.FC<{
                     onNavigate={setActiveView}
                     userRole={user.role}
                     badges={badges}
+                    hasPermission={hasPermission}
                 />
             )}
 

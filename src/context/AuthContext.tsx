@@ -12,7 +12,7 @@ export interface Permission {
 }
 
 interface AuthContextType extends AuthState {
-    login: (email: string, password: string) => Promise<void>;
+    login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
     logout: () => void;
     error: string | null;
     permissions: Permission[];
@@ -71,7 +71,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     if (validUser) {
                         setToken(storedToken);
                         setUser(validUser);
-                        if (validUser.role !== 'ADMIN') {
+                        if (validUser.role !== 'ADMIN' && validUser.role !== 'MANAGER') {
                             const perms = await fetchPermissions(storedToken);
                             setPermissions(perms);
                         }
@@ -101,16 +101,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     }, []);
 
-    const login = useCallback(async (email: string, password: string) => {
+    const login = useCallback(async (email: string, password: string, rememberMe = true) => {
         setIsLoading(true);
         setError(null);
         try {
             const response = await loginAPI(email, password);
             setToken(response.token);
             setUser(response.user);
-            await persistToken(response.token);
 
-            if (response.user.role !== 'ADMIN') {
+            // Save rememberMe preference and persist token only if checked
+            if (window.electronAPI?.saveConfig) {
+                await window.electronAPI.saveConfig({ rememberMe });
+            }
+            if (rememberMe) {
+                await persistToken(response.token);
+            } else {
+                await persistToken(null); // Clear any previously saved token
+            }
+
+            if (response.user.role !== 'ADMIN' && response.user.role !== 'MANAGER') {
                 const perms = await fetchPermissions(response.token);
                 setPermissions(perms);
             }

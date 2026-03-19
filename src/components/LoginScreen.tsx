@@ -1,23 +1,43 @@
-import React, { useState, FormEvent } from 'react';
+import React, { useState, useEffect, FormEvent } from 'react';
 
 interface LoginScreenProps {
-    onLogin: (email: string, password: string) => Promise<void>;
+    onLogin: (email: string, password: string, rememberMe: boolean) => Promise<void>;
     error: string | null;
     isLoading: boolean;
     storeName: string;
     onChangeServer?: () => void;
 }
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, error, isLoading, storeName, onChangeServer }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
+    const [rememberMe, setRememberMe] = useState(true);
+    const [localError, setLocalError] = useState<string | null>(null);
+
+    // Load saved rememberMe preference
+    useEffect(() => {
+        if (window.electronAPI?.getConfig) {
+            window.electronAPI.getConfig().then(cfg => {
+                if (cfg.rememberMe !== undefined) setRememberMe(cfg.rememberMe);
+            });
+        }
+    }, []);
+
+    const displayError = localError || error;
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
+        setLocalError(null);
         if (!email.trim() || !password.trim()) return;
+        if (!EMAIL_RE.test(email.trim())) {
+            setLocalError('Ingresa un correo electrónico válido');
+            return;
+        }
         try {
-            await onLogin(email.trim(), password);
+            await onLogin(email.trim(), password, rememberMe);
         } catch {
             // Error is handled by parent context
         }
@@ -40,10 +60,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, error, isLoad
 
                 {/* Form */}
                 <form className="login-card__form" onSubmit={handleSubmit}>
-                    {error && (
+                    {displayError && (
                         <div className="login-card__error">
                             <span className="login-card__error-icon">⚠️</span>
-                            <span>{error}</span>
+                            <span>{displayError}</span>
                         </div>
                     )}
 
@@ -93,6 +113,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, error, isLoad
                             </button>
                         </div>
                     </div>
+
+                    <label className="login-card__remember">
+                        <input
+                            type="checkbox"
+                            checked={rememberMe}
+                            onChange={(e) => setRememberMe(e.target.checked)}
+                            disabled={isLoading}
+                        />
+                        <span>Recordar sesión</span>
+                    </label>
 
                     <button
                         type="submit"

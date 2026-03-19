@@ -3,6 +3,15 @@ import { Role } from '../types/order';
 
 export type ActiveView = 'dashboard' | 'kitchen' | 'orders' | 'delivery' | 'cash';
 
+/** Permission module required for each view */
+export const VIEW_PERMISSIONS: Record<ActiveView, string> = {
+    dashboard: 'reports',
+    kitchen: 'kitchen_view',
+    orders: 'orders',
+    delivery: 'delivery_view',
+    cash: 'cash_management',
+};
+
 interface NavItem {
     key: ActiveView;
     label: string;
@@ -23,10 +32,22 @@ interface ViewNavBarProps {
     onNavigate: (view: ActiveView) => void;
     userRole: Role;
     badges?: Partial<Record<ActiveView, number>>;
+    hasPermission?: (module: string, action: 'read' | 'write') => boolean;
 }
 
-export const ViewNavBar: React.FC<ViewNavBarProps> = ({ currentView, onNavigate, userRole, badges }) => {
-    const visibleItems = NAV_ITEMS.filter(item => item.roles.includes(userRole));
+export const ViewNavBar: React.FC<ViewNavBarProps> = ({ currentView, onNavigate, userRole, badges, hasPermission }) => {
+    const visibleItems = NAV_ITEMS.filter(item => {
+        // Must be in allowed roles for this view
+        if (!item.roles.includes(userRole)) return false;
+        // ADMIN/MANAGER bypass permission checks
+        if (userRole === 'ADMIN' || userRole === 'MANAGER') return true;
+        // Check granular permission if hasPermission is provided
+        if (hasPermission) {
+            const mod = VIEW_PERMISSIONS[item.key];
+            return hasPermission(mod, 'read');
+        }
+        return true;
+    });
 
     // Don't render if only 1 item (single-role users like KITCHEN see only kitchen)
     if (visibleItems.length <= 1) return null;
