@@ -111,70 +111,134 @@ function createWindow(): void {
 
 // ─── Auto-Updater ───────────────────────────────────────────────────────────
 
-function setupAutoUpdater(): void {
+async function checkForUpdateOnStartup(): Promise<void> {
     if (isDev) {
         log.info('[Updater] Skipping auto-update in dev mode');
         return;
     }
 
-    // Auto-download and install on quit — seamless for the user
+    autoUpdater.autoDownload = false;
+    autoUpdater.autoInstallOnAppQuit = true;
+
+    log.info('[Updater] Checking for updates before showing app...');
+
+    try {
+        const result = await autoUpdater.checkForUpdates();
+        if (!result || !result.updateInfo || result.updateInfo.version === app.getVersion()) {
+            log.info('[Updater] Already up to date');
+            return;
+        }
+
+        const newVersion = result.updateInfo.version;
+        log.info(`[Updater] Update available: v${newVersion}`);
+
+        // Show dialog asking user to update
+        const response = await dialog.showMessageBox({
+            type: 'info',
+            title: 'Actualizacion disponible',
+            message: `Nueva version v${newVersion} disponible`,
+            detail: `Version actual: v${app.getVersion()}\n\nSe descargara e instalara automaticamente.`,
+            buttons: ['Actualizar ahora', 'Omitir'],
+            defaultId: 0,
+            cancelId: 1,
+        });
+
+        if (response.response === 0) {
+            // User chose to update — download with progress dialog
+            log.info('[Updater] User accepted update, downloading...');
+
+            const progressWin = new BrowserWindow({
+                width: 400,
+                height: 160,
+                resizable: false,
+                frame: false,
+                alwaysOnTop: true,
+                backgroundColor: '#0a0c10',
+                webPreferences: { contextIsolation: true },
+            });
+
+            progressWin.loadURL(`data:text/html;charset=utf-8,
+                <html>
+                <body style="margin:0;background:#0a0c10;color:#f1f5f9;font-family:system-ui;display:flex;flex-direction:column;justify-content:center;align-items:center;height:100vh;gap:12px">
+                    <div style="font-size:16px;font-weight:600">Descargando actualizacion...</div>
+                    <div id="pct" style="font-size:24px;color:#f97316">0%</div>
+                    <div style="width:300px;height:6px;background:rgba(255,255,255,0.1);border-radius:3px;overflow:hidden">
+                        <div id="bar" style="height:100%;width:0%;background:#f97316;border-radius:3px;transition:width 0.3s"></div>
+                    </div>
+                </body>
+                </html>
+            `);
+
+            autoUpdater.on('download-progress', (progress) => {
+                const pct = Math.round(progress.percent);
+                if (progressWin && !progressWin.isDestroyed()) {
+                    progressWin.webContents.executeJavaScript(
+                        `document.getElementById('pct').textContent='${pct}%';document.getElementById('bar').style.width='${pct}%';`
+                    ).catch(() => {});
+                }
+            });
+
+            autoUpdater.on('update-downloaded', () => {
+                log.info('[Updater] Download complete, installing...');
+                if (progressWin && !progressWin.isDestroyed()) {
+                    progressWin.close();
+                }
+                autoUpdater.quitAndInstall(false, true);
+            });
+
+            autoUpdater.on('error', (error) => {
+                log.error('[Updater] Download error:', error);
+                if (progressWin && !progressWin.isDestroyed()) {
+                    progressWin.close();
+                }
+                dialog.showErrorBox('Error de actualizacion', 'No se pudo descargar la actualizacion. La app se abrira normalmente.');
+            });
+
+            await autoUpdater.downloadUpdate();
+            return;
+        }
+
+        log.info('[Updater] User skipped update');
+    } catch (err) {
+        log.error('[Updater] Startup check failed:', err);
+        // Silently continue — don't block the app from opening
+    }
+}
+
+function setupBackgroundUpdater(): void {
+    if (isDev) return;
+
     autoUpdater.autoDownload = true;
     autoUpdater.autoInstallOnAppQuit = true;
 
     autoUpdater.on('checking-for-update', () => {
-        log.info('[Updater] Checking for updates...');
         sendToRenderer('updater-status', { status: 'checking' });
     });
 
-    autoUpdater.on('update-available', (info) => {
-        log.info(`[Updater] Update available: v${info.version}`);
-        sendToRenderer('updater-status', {
-            status: 'available',
-            version: info.version,
-            releaseNotes: info.releaseNotes,
-            releaseDate: info.releaseDate,
-        });
+    autoUpdater.on('update-available', (info: any) => {
+        sendToRenderer('updater-status', { status: 'available', version: info.version });
     });
 
     autoUpdater.on('update-not-available', () => {
-        log.info('[Updater] Already up to date');
         sendToRenderer('updater-status', { status: 'up-to-date' });
     });
 
-    autoUpdater.on('download-progress', (progress) => {
+    autoUpdater.on('download-progress', (progress: any) => {
         sendToRenderer('updater-status', {
             status: 'downloading',
             percent: Math.round(progress.percent),
-            transferred: progress.transferred,
-            total: progress.total,
-            bytesPerSecond: progress.bytesPerSecond,
         });
     });
 
-    autoUpdater.on('update-downloaded', (info) => {
-        log.info(`[Updater] Update downloaded: v${info.version}`);
-        sendToRenderer('updater-status', {
-            status: 'ready',
-            version: info.version,
-        });
+    autoUpdater.on('update-downloaded', (info: any) => {
+        sendToRenderer('updater-status', { status: 'ready', version: info.version });
     });
 
-    autoUpdater.on('error', (error) => {
-        log.error('[Updater] Error:', error);
-        sendToRenderer('updater-status', {
-            status: 'error',
-            message: error.message,
-        });
+    autoUpdater.on('error', (error: any) => {
+        sendToRenderer('updater-status', { status: 'error', message: error.message });
     });
 
-    // Check for updates 5 seconds after app starts
-    setTimeout(() => {
-        autoUpdater.checkForUpdates().catch(err => {
-            log.error('[Updater] Check failed:', err);
-        });
-    }, 5000);
-
-    // Then check every 30 minutes
+    // Check every 30 minutes in background
     setInterval(() => {
         autoUpdater.checkForUpdates().catch(err => {
             log.error('[Updater] Periodic check failed:', err);
@@ -285,9 +349,13 @@ ipcMain.handle('get-app-version', async () => {
 
 // ─── App Lifecycle ───────────────────────────────────────────────────────────
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+    // Check for updates BEFORE showing the app
+    await checkForUpdateOnStartup();
+
+    // If we're still running (user skipped or no update), show the app
     createWindow();
-    setupAutoUpdater();
+    setupBackgroundUpdater();
 
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {
