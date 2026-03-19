@@ -106,7 +106,7 @@ export const POSView: React.FC<POSViewProps> = ({ token, serverUrl, locationId, 
     // ─── Table Picker ───────────────────────────────────────────────────────
     const [showTablePicker, setShowTablePicker] = useState(false);
 
-    // ─── Load catalog (online → offline fallback) ─────────────────────────
+    // ─── Load catalog (once on mount, NOT on offline change) ──────────────
     useEffect(() => {
         const locId = locationId && locationId > 0 ? locationId : undefined;
         setLoading(true);
@@ -147,17 +147,22 @@ export const POSView: React.FC<POSViewProps> = ({ token, serverUrl, locationId, 
             return true;
         };
 
-        if (isOffline) {
-            loadOffline().then(ok => {
-                if (!ok) console.warn('[POS] No cached catalog available');
-            }).finally(() => setLoading(false));
-        } else {
-            loadOnline().catch(async (err) => {
-                console.error('[POS] Online load failed, trying cache:', err);
-                await loadOffline();
-            }).finally(() => setLoading(false));
-        }
-    }, [token, locationId, isOffline]);
+        loadOnline().then(async () => {
+            // After successful online load, sync to SQLite in background for offline use
+            try {
+                const api = window.electronAPI;
+                if (api?.offlineSyncCatalog && locId) {
+                    const config = await api.getConfig();
+                    if (config.serverUrl) {
+                        api.offlineSyncCatalog(config.serverUrl, token, locId).catch(() => {});
+                    }
+                }
+            } catch {}
+        }).catch(async (err) => {
+            console.error('[POS] Online load failed, trying cache:', err);
+            await loadOffline();
+        }).finally(() => setLoading(false));
+    }, [token, locationId]); // NO depende de isOffline — no recargar al perder red
 
     // ─── Keyboard shortcuts ─────────────────────────────────────────────────
     useEffect(() => {
