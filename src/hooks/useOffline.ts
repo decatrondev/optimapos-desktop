@@ -27,7 +27,7 @@ interface UseOfflineResult {
 const PING_INTERVAL = 15_000; // 15 seconds
 
 export function useOffline({ serverUrl, token, locationId }: UseOfflineOptions): UseOfflineResult {
-    const [status, setStatus] = useState<ConnectionStatus>('connected');
+    const [status, setStatus] = useState<ConnectionStatus>('reconnecting');
     const [lastSync, setLastSync] = useState<string | null>(null);
     const [pendingCount, setPendingCount] = useState(0);
     const [hasCatalog, setHasCatalog] = useState(false);

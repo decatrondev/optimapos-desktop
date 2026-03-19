@@ -129,6 +129,9 @@ export interface AppConfig {
     locationId: number | null;
     locationName: string | null;
     rememberMe: boolean;
+    cachedUser: string | null;
+    cachedPermissions: string | null;
+    cachedLocations: string | null;
 }
 
 export interface Location {

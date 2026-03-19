@@ -71,15 +71,41 @@ export async function validateToken(token: string): Promise<AuthUser | null> {
 
         const res = await fetch(`${serverUrl}/api/auth/me`, {
             headers: { 'Authorization': `Bearer ${token}` },
+            signal: AbortSignal.timeout(5000),
         });
         if (!res.ok) return null;
         const data = await res.json();
         const user = data.user || data;
         if (BLOCKED_ROLES.includes(user.role)) return null;
+        // Cache user data for offline use
+        await cacheUserData(user);
         return user;
     } catch {
-        return null;
+        // Network error — try to restore from cached user data
+        return getCachedUserData();
     }
+}
+
+/** Cache user data in Electron config for offline recovery */
+async function cacheUserData(user: AuthUser): Promise<void> {
+    if (window.electronAPI?.saveConfig) {
+        await window.electronAPI.saveConfig({ cachedUser: JSON.stringify(user) } as any);
+    }
+}
+
+/** Retrieve cached user data when offline */
+async function getCachedUserData(): Promise<AuthUser | null> {
+    try {
+        if (window.electronAPI?.getConfig) {
+            const config: any = await window.electronAPI.getConfig();
+            if (config.cachedUser) {
+                const user = JSON.parse(config.cachedUser);
+                if (BLOCKED_ROLES.includes(user.role)) return null;
+                return user;
+            }
+        }
+    } catch {}
+    return null;
 }
 
 /** Validate a server URL by calling /api/health */
@@ -100,11 +126,16 @@ export async function validateServer(url: string): Promise<{ valid: boolean; nam
 
 /** Fetch user's locations */
 export async function fetchUserLocations(token: string): Promise<Array<{ id: number; name: string; address: string | null }>> {
-    const serverUrl = await getServerUrl();
-    const res = await fetch(`${serverUrl}/api/locations`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-    });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return (Array.isArray(data) ? data : data.locations || []).filter((l: any) => l.isActive !== false);
+    try {
+        const serverUrl = await getServerUrl();
+        const res = await fetch(`${serverUrl}/api/locations`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+            signal: AbortSignal.timeout(5000),
+        });
+        if (!res.ok) return [];
+        const data = await res.json();
+        return (Array.isArray(data) ? data : data.locations || []).filter((l: any) => l.isActive !== false);
+    } catch {
+        return []; // Will fall back to cached locations in AuthContext
+    }
 }

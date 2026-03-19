@@ -106,6 +106,9 @@ interface AppConfig {
     locationId: number | null;
     locationName: string | null;
     rememberMe: boolean;
+    cachedUser: string | null;       // JSON-stringified user for offline login
+    cachedPermissions: string | null; // JSON-stringified permissions for offline
+    cachedLocations: string | null;   // JSON-stringified locations for offline
 }
 
 const DEFAULT_CONFIG: AppConfig = {
@@ -118,6 +121,9 @@ const DEFAULT_CONFIG: AppConfig = {
     locationId: null,
     locationName: null,
     rememberMe: false,
+    cachedUser: null,
+    cachedPermissions: null,
+    cachedLocations: null,
 };
 
 function readConfig(): AppConfig {

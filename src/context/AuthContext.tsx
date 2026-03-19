@@ -37,12 +37,38 @@ async function fetchPermissions(token: string): Promise<Permission[]> {
         const serverUrl = await getServerUrl();
         const res = await fetch(`${serverUrl}/api/users/me/permissions`, {
             headers: { 'Authorization': `Bearer ${token}` },
+            signal: AbortSignal.timeout(5000),
         });
-        if (!res.ok) return [];
-        return await res.json();
+        if (!res.ok) return getCachedPermissions();
+        const perms = await res.json();
+        // Cache for offline
+        if (window.electronAPI?.saveConfig) {
+            await window.electronAPI.saveConfig({ cachedPermissions: JSON.stringify(perms) } as any);
+        }
+        return perms;
     } catch {
-        return [];
+        return getCachedPermissions();
     }
+}
+
+async function getCachedPermissions(): Promise<Permission[]> {
+    try {
+        if (window.electronAPI?.getConfig) {
+            const config: any = await window.electronAPI.getConfig();
+            if (config.cachedPermissions) return JSON.parse(config.cachedPermissions);
+        }
+    } catch {}
+    return [];
+}
+
+async function getCachedLocations(): Promise<Location[]> {
+    try {
+        if (window.electronAPI?.getConfig) {
+            const config: any = await window.electronAPI.getConfig();
+            if (config.cachedLocations) return JSON.parse(config.cachedLocations);
+        }
+    } catch {}
+    return [];
 }
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -75,8 +101,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                             const perms = await fetchPermissions(storedToken);
                             setPermissions(perms);
                         }
-                        // Fetch locations
-                        const locs = await fetchUserLocations(storedToken);
+                        // Fetch locations (with offline fallback)
+                        let locs = await fetchUserLocations(storedToken);
+                        if (locs.length > 0) {
+                            // Cache for offline
+                            if (window.electronAPI?.saveConfig) {
+                                await window.electronAPI.saveConfig({ cachedLocations: JSON.stringify(locs) } as any);
+                            }
+                        } else {
+                            // Try cached locations
+                            locs = await getCachedLocations();
+                        }
                         setLocations(locs);
                     } else {
                         await persistToken(null);
@@ -124,9 +159,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 setPermissions(perms);
             }
 
-            // Fetch locations
+            // Fetch locations + cache
             const locs = await fetchUserLocations(response.token);
             setLocations(locs);
+            if (window.electronAPI?.saveConfig && locs.length > 0) {
+                await window.electronAPI.saveConfig({ cachedLocations: JSON.stringify(locs) } as any);
+            }
         } catch (e) {
             const message = e instanceof AuthError ? e.message : 'Error de conexión. Verifica tu red.';
             setError(message);
