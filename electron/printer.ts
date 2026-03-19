@@ -115,36 +115,79 @@ export function printViaUSB(
             return resolve({ success: false, error: `Error escribiendo archivo temporal: ${err.message}` });
         }
 
-        let cmd: string;
-
-        if (platform === 'win32') {
-            // Windows: Use Spooler API via PowerShell to send RAW binary data
-            // The standard `print /d:` command treats data as text — doesn't work for ESC/POS
-            const escapedPrinter = resolvedName.replace(/'/g, "''");
-            const escapedFile = tmpFile.replace(/'/g, "''");
-            cmd = `powershell -NoProfile -Command "Add-Type -TypeDefinition @\\"\nusing System;using System.Runtime.InteropServices;\npublic class RawPrint{\n[StructLayout(LayoutKind.Sequential)]public struct DOCINFOA{[MarshalAs(UnmanagedType.LPStr)]public string N;[MarshalAs(UnmanagedType.LPStr)]public string O;[MarshalAs(UnmanagedType.LPStr)]public string D;}\n[DllImport(\\\"winspool.drv\\\",SetLastError=true,CharSet=CharSet.Ansi)]public static extern bool OpenPrinter(string p,out IntPtr h,IntPtr d);\n[DllImport(\\\"winspool.drv\\\",SetLastError=true,CharSet=CharSet.Ansi)]public static extern bool StartDocPrinter(IntPtr h,int l,ref DOCINFOA di);\n[DllImport(\\\"winspool.drv\\\",SetLastError=true)]public static extern bool StartPagePrinter(IntPtr h);\n[DllImport(\\\"winspool.drv\\\",SetLastError=true)]public static extern bool WritePrinter(IntPtr h,IntPtr b,int c,out int w);\n[DllImport(\\\"winspool.drv\\\",SetLastError=true)]public static extern bool EndPagePrinter(IntPtr h);\n[DllImport(\\\"winspool.drv\\\",SetLastError=true)]public static extern bool EndDocPrinter(IntPtr h);\n[DllImport(\\\"winspool.drv\\\",SetLastError=true)]public static extern bool ClosePrinter(IntPtr h);\npublic static bool Send(string name,byte[] data){IntPtr h;DOCINFOA di=new DOCINFOA();di.N=\\\"OptimaPOS\\\";di.D=\\\"RAW\\\";\nif(!OpenPrinter(name,out h,IntPtr.Zero))return false;\nif(!StartDocPrinter(h,1,ref di)){ClosePrinter(h);return false;}\nif(!StartPagePrinter(h)){EndDocPrinter(h);ClosePrinter(h);return false;}\nIntPtr p=Marshal.AllocCoTaskMem(data.Length);Marshal.Copy(data,0,p,data.Length);int w;\nbool ok=WritePrinter(h,p,data.Length,out w);Marshal.FreeCoTaskMem(p);\nEndPagePrinter(h);EndDocPrinter(h);ClosePrinter(h);return ok;}}\n\\"@;$r=[RawPrint]::Send('${escapedPrinter}',[System.IO.File]::ReadAllBytes('${escapedFile}'));if(!$r){exit 1}"`;
-        } else if (platform === 'darwin') {
-            // macOS: use lp with raw option
-            cmd = `lp -d "${resolvedName}" -o raw "${tmpFile}"`;
-        } else {
-            // Linux: use lp with raw option
-            cmd = `lp -d "${resolvedName}" -o raw "${tmpFile}"`;
-        }
-
         log.info(`[Printer USB] Sending raw data to "${resolvedName}" (${data.length} bytes)`);
 
-        exec(cmd, { timeout: 15000 }, (error, _stdout, stderr) => {
-            // Clean up temp file
-            try { require('fs').unlinkSync(tmpFile); } catch {}
+        if (platform === 'win32') {
+            // Windows: Write a temp .ps1 script that uses Spooler API with RAW datatype
+            const psScript = require('path').join(os.tmpdir(), `optimapos-rawprint-${Date.now()}.ps1`);
+            const escapedPrinter = resolvedName.replace(/'/g, "''");
+            const escapedFile = tmpFile.replace(/\\/g, '\\\\');
 
-            if (error) {
-                log.error(`[Printer USB] Error: ${error.message}`);
-                resolve({ success: false, error: stderr || error.message });
-            } else {
-                log.info('[Printer USB] RAW print job sent successfully');
-                resolve({ success: true });
+            const scriptContent = `
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public class RawPrint {
+    [StructLayout(LayoutKind.Sequential)] public struct DOCINFOA {
+        [MarshalAs(UnmanagedType.LPStr)] public string N;
+        [MarshalAs(UnmanagedType.LPStr)] public string O;
+        [MarshalAs(UnmanagedType.LPStr)] public string D;
+    }
+    [DllImport("winspool.drv",SetLastError=true,CharSet=CharSet.Ansi)] public static extern bool OpenPrinter(string p,out IntPtr h,IntPtr d);
+    [DllImport("winspool.drv",SetLastError=true,CharSet=CharSet.Ansi)] public static extern bool StartDocPrinter(IntPtr h,int l,ref DOCINFOA di);
+    [DllImport("winspool.drv",SetLastError=true)] public static extern bool StartPagePrinter(IntPtr h);
+    [DllImport("winspool.drv",SetLastError=true)] public static extern bool WritePrinter(IntPtr h,IntPtr b,int c,out int w);
+    [DllImport("winspool.drv",SetLastError=true)] public static extern bool EndPagePrinter(IntPtr h);
+    [DllImport("winspool.drv",SetLastError=true)] public static extern bool EndDocPrinter(IntPtr h);
+    [DllImport("winspool.drv",SetLastError=true)] public static extern bool ClosePrinter(IntPtr h);
+    public static bool Send(string name, byte[] data) {
+        IntPtr h; DOCINFOA di = new DOCINFOA(); di.N = "OptimaPOS"; di.D = "RAW";
+        if (!OpenPrinter(name, out h, IntPtr.Zero)) return false;
+        if (!StartDocPrinter(h, 1, ref di)) { ClosePrinter(h); return false; }
+        if (!StartPagePrinter(h)) { EndDocPrinter(h); ClosePrinter(h); return false; }
+        IntPtr p = Marshal.AllocCoTaskMem(data.Length); Marshal.Copy(data, 0, p, data.Length); int w;
+        bool ok = WritePrinter(h, p, data.Length, out w); Marshal.FreeCoTaskMem(p);
+        EndPagePrinter(h); EndDocPrinter(h); ClosePrinter(h); return ok;
+    }
+}
+"@
+\\$ok = [RawPrint]::Send('${escapedPrinter}', [System.IO.File]::ReadAllBytes('${escapedFile}'))
+if (-not \\$ok) { exit 1 }
+`;
+            try {
+                require('fs').writeFileSync(psScript, scriptContent, 'utf-8');
+            } catch (err: any) {
+                return resolve({ success: false, error: `Error writing script: ${err.message}` });
             }
-        });
+
+            exec(`powershell -NoProfile -ExecutionPolicy Bypass -File "${psScript}"`, { timeout: 15000 }, (error, _stdout, stderr) => {
+                try { require('fs').unlinkSync(psScript); } catch {}
+                try { require('fs').unlinkSync(tmpFile); } catch {}
+
+                if (error) {
+                    log.error(`[Printer USB] Error: ${error.message}`);
+                    resolve({ success: false, error: stderr || error.message });
+                } else {
+                    log.info('[Printer USB] RAW print job sent successfully');
+                    resolve({ success: true });
+                }
+            });
+        } else {
+            // macOS / Linux: use lp with raw option
+            const cmd = `lp -d "${resolvedName}" -o raw "${tmpFile}"`;
+
+            exec(cmd, { timeout: 15000 }, (error, _stdout, stderr) => {
+                try { require('fs').unlinkSync(tmpFile); } catch {}
+
+                if (error) {
+                    log.error(`[Printer USB] Error: ${error.message}`);
+                    resolve({ success: false, error: stderr || error.message });
+                } else {
+                    log.info('[Printer USB] RAW print job sent successfully');
+                    resolve({ success: true });
+                }
+            });
+        }
     });
 }
 
