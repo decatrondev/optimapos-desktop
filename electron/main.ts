@@ -4,6 +4,15 @@ import * as fs from 'fs';
 import * as dotenv from 'dotenv';
 import log from 'electron-log';
 import { autoUpdater } from 'electron-updater';
+import {
+    printViaTCP,
+    printViaUSB,
+    scanNetworkPrinters,
+    getSystemPrinters,
+    buildTestTicket,
+    textToEscPos,
+    testTCPConnection,
+} from './printer';
 
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
@@ -313,6 +322,59 @@ ipcMain.handle('print-ticket', async (_event, ticketText: string, fileName: stri
         console.error('[Printer] Error writing ticket:', error);
         return { success: false, error: error.message };
     }
+});
+
+// ─── Printer IPC ─────────────────────────────────────────────────────────────
+
+// Print raw ESC/POS data via TCP (network)
+ipcMain.handle('printer-print-tcp', async (_event, ip: string, port: number, data: number[]) => {
+    return printViaTCP(ip, port, Buffer.from(data));
+});
+
+// Print raw ESC/POS data via USB (system driver)
+ipcMain.handle('printer-print-usb', async (_event, printerName: string, data: number[]) => {
+    return printViaUSB(printerName, Buffer.from(data));
+});
+
+// Print text via TCP (auto-converts to ESC/POS)
+ipcMain.handle('printer-print-text-tcp', async (_event, ip: string, port: number, text: string) => {
+    const data = textToEscPos(text);
+    return printViaTCP(ip, port, data);
+});
+
+// Print text via USB (auto-converts to ESC/POS)
+ipcMain.handle('printer-print-text-usb', async (_event, printerName: string, text: string) => {
+    const data = textToEscPos(text);
+    return printViaUSB(printerName, data);
+});
+
+// Print test ticket via TCP
+ipcMain.handle('printer-test-tcp', async (_event, ip: string, port: number, storeName: string) => {
+    const data = buildTestTicket(storeName);
+    return printViaTCP(ip, port, data);
+});
+
+// Print test ticket via USB
+ipcMain.handle('printer-test-usb', async (_event, printerName: string, storeName: string) => {
+    const data = buildTestTicket(storeName);
+    return printViaUSB(printerName, data);
+});
+
+// Test TCP connection (no print)
+ipcMain.handle('printer-test-connection', async (_event, ip: string, port: number) => {
+    return testTCPConnection(ip, port);
+});
+
+// Scan network for printers (port 9100)
+ipcMain.handle('printer-scan-network', async () => {
+    return scanNetworkPrinters(9100, 300, (current, total) => {
+        sendToRenderer('printer-scan-progress', { current, total });
+    });
+});
+
+// List system printers (USB/installed)
+ipcMain.handle('printer-list-system', async () => {
+    return getSystemPrinters();
 });
 
 // ─── Updater IPC ─────────────────────────────────────────────────────────────

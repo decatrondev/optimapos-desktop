@@ -1,0 +1,425 @@
+import * as net from 'net';
+import * as os from 'os';
+import { exec } from 'child_process';
+import log from 'electron-log';
+
+// ─── ESC/POS Command Constants ──────────────────────────────────────────────
+
+const ESC = 0x1B;
+const GS = 0x1D;
+const LF = 0x0A;
+
+const CMD = {
+    INIT: Buffer.from([ESC, 0x40]),                         // Initialize printer
+    CUT_PARTIAL: Buffer.from([GS, 0x56, 0x01]),             // Partial cut
+    CUT_FULL: Buffer.from([GS, 0x56, 0x00]),                // Full cut
+    ALIGN_LEFT: Buffer.from([ESC, 0x61, 0x00]),
+    ALIGN_CENTER: Buffer.from([ESC, 0x61, 0x01]),
+    ALIGN_RIGHT: Buffer.from([ESC, 0x61, 0x02]),
+    BOLD_ON: Buffer.from([ESC, 0x45, 0x01]),
+    BOLD_OFF: Buffer.from([ESC, 0x45, 0x00]),
+    UNDERLINE_ON: Buffer.from([ESC, 0x2D, 0x01]),
+    UNDERLINE_OFF: Buffer.from([ESC, 0x2D, 0x00]),
+    DOUBLE_WIDTH: Buffer.from([GS, 0x21, 0x10]),            // Double width
+    DOUBLE_HEIGHT: Buffer.from([GS, 0x21, 0x01]),           // Double height
+    DOUBLE_SIZE: Buffer.from([GS, 0x21, 0x11]),             // Double width + height
+    NORMAL_SIZE: Buffer.from([GS, 0x21, 0x00]),             // Normal size
+    FONT_A: Buffer.from([ESC, 0x4D, 0x00]),                 // Font A (12x24)
+    FONT_B: Buffer.from([ESC, 0x4D, 0x01]),                 // Font B (9x17)
+    FEED_LINES: (n: number) => Buffer.from([ESC, 0x64, n]), // Feed n lines
+    OPEN_DRAWER: Buffer.from([ESC, 0x70, 0x00, 0x19, 0xFA]),// Open cash drawer pin 2
+};
+
+// ─── TCP Printer (Network) ──────────────────────────────────────────────────
+
+export function printViaTCP(
+    ip: string,
+    port: number,
+    data: Buffer,
+    timeout = 5000
+): Promise<{ success: boolean; error?: string }> {
+    return new Promise((resolve) => {
+        const socket = new net.Socket();
+        let resolved = false;
+
+        const finish = (result: { success: boolean; error?: string }) => {
+            if (resolved) return;
+            resolved = true;
+            socket.destroy();
+            resolve(result);
+        };
+
+        socket.setTimeout(timeout);
+
+        socket.on('timeout', () => {
+            log.error(`[Printer TCP] Timeout connecting to ${ip}:${port}`);
+            finish({ success: false, error: `Timeout: no se pudo conectar a ${ip}:${port}` });
+        });
+
+        socket.on('error', (err) => {
+            log.error(`[Printer TCP] Error: ${err.message}`);
+            finish({ success: false, error: err.message });
+        });
+
+        socket.connect(port, ip, () => {
+            log.info(`[Printer TCP] Connected to ${ip}:${port}, sending ${data.length} bytes`);
+            socket.write(data, () => {
+                // Give the printer time to process before closing
+                setTimeout(() => {
+                    finish({ success: true });
+                }, 500);
+            });
+        });
+    });
+}
+
+// ─── USB Printer (via system driver name) ───────────────────────────────────
+
+export function printViaUSB(
+    printerName: string,
+    data: Buffer
+): Promise<{ success: boolean; error?: string }> {
+    return new Promise((resolve) => {
+        const platform = process.platform;
+        const tmpFile = require('path').join(os.tmpdir(), `optimapos-ticket-${Date.now()}.bin`);
+
+        // Write binary data to temp file
+        try {
+            require('fs').writeFileSync(tmpFile, data);
+        } catch (err: any) {
+            return resolve({ success: false, error: `Error escribiendo archivo temporal: ${err.message}` });
+        }
+
+        let cmd: string;
+
+        if (platform === 'win32') {
+            // Windows: use print command or raw copy
+            cmd = `print /d:"${printerName}" "${tmpFile}"`;
+        } else if (platform === 'darwin') {
+            // macOS: use lp
+            cmd = `lp -d "${printerName}" -o raw "${tmpFile}"`;
+        } else {
+            // Linux: use lp or lpr
+            cmd = `lp -d "${printerName}" -o raw "${tmpFile}"`;
+        }
+
+        log.info(`[Printer USB] Executing: ${cmd}`);
+
+        exec(cmd, { timeout: 10000 }, (error, _stdout, stderr) => {
+            // Clean up temp file
+            try { require('fs').unlinkSync(tmpFile); } catch {}
+
+            if (error) {
+                log.error(`[Printer USB] Error: ${error.message}`);
+                resolve({ success: false, error: stderr || error.message });
+            } else {
+                log.info('[Printer USB] Print job sent successfully');
+                resolve({ success: true });
+            }
+        });
+    });
+}
+
+// ─── Network Scanner (detect printers on port 9100) ────────────────────────
+
+function getLocalSubnet(): string | null {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+        const iface = interfaces[name];
+        if (!iface) continue;
+        for (const info of iface) {
+            if (info.family === 'IPv4' && !info.internal && info.address.startsWith('192.168.')) {
+                // Return the subnet prefix (e.g., "192.168.18")
+                const parts = info.address.split('.');
+                return `${parts[0]}.${parts[1]}.${parts[2]}`;
+            }
+        }
+    }
+    return null;
+}
+
+function scanPort(ip: string, port: number, timeout: number): Promise<boolean> {
+    return new Promise((resolve) => {
+        const socket = new net.Socket();
+        let resolved = false;
+
+        const done = (open: boolean) => {
+            if (resolved) return;
+            resolved = true;
+            socket.destroy();
+            resolve(open);
+        };
+
+        socket.setTimeout(timeout);
+        socket.on('connect', () => done(true));
+        socket.on('timeout', () => done(false));
+        socket.on('error', () => done(false));
+        socket.connect(port, ip);
+    });
+}
+
+export interface DiscoveredPrinter {
+    ip: string;
+    port: number;
+    mac?: string;
+    hostname?: string;
+}
+
+export async function scanNetworkPrinters(
+    port = 9100,
+    timeout = 300,
+    onProgress?: (current: number, total: number) => void
+): Promise<DiscoveredPrinter[]> {
+    const subnet = getLocalSubnet();
+    if (!subnet) {
+        log.warn('[Scanner] Could not determine local subnet');
+        return [];
+    }
+
+    log.info(`[Scanner] Scanning ${subnet}.1-254 on port ${port}...`);
+    const found: DiscoveredPrinter[] = [];
+    const total = 254;
+
+    // Scan in batches of 20 for performance
+    const batchSize = 20;
+    for (let start = 1; start <= 254; start += batchSize) {
+        const batch: Promise<void>[] = [];
+        for (let i = start; i < start + batchSize && i <= 254; i++) {
+            const ip = `${subnet}.${i}`;
+            batch.push(
+                scanPort(ip, port, timeout).then((open) => {
+                    if (open) {
+                        log.info(`[Scanner] Found printer at ${ip}:${port}`);
+                        found.push({ ip, port });
+                    }
+                })
+            );
+        }
+        await Promise.all(batch);
+        if (onProgress) {
+            onProgress(Math.min(start + batchSize - 1, 254), total);
+        }
+    }
+
+    log.info(`[Scanner] Scan complete. Found ${found.length} printer(s)`);
+    return found;
+}
+
+// ─── System Printer List (USB/installed printers) ───────────────────────────
+
+export interface SystemPrinter {
+    name: string;
+    isDefault: boolean;
+    portName?: string;
+}
+
+export function getSystemPrinters(): Promise<SystemPrinter[]> {
+    return new Promise((resolve) => {
+        const platform = process.platform;
+
+        if (platform === 'win32') {
+            exec(
+                'powershell -Command "Get-WmiObject Win32_Printer | Select-Object Name, PortName, Default | ConvertTo-Json"',
+                { timeout: 10000 },
+                (error, stdout) => {
+                    if (error) {
+                        log.error('[Printers] Windows list error:', error.message);
+                        return resolve([]);
+                    }
+                    try {
+                        let data = JSON.parse(stdout);
+                        if (!Array.isArray(data)) data = [data];
+                        const printers: SystemPrinter[] = data
+                            .filter((p: any) => p.Name)
+                            .map((p: any) => ({
+                                name: p.Name,
+                                isDefault: p.Default === true,
+                                portName: p.PortName || undefined,
+                            }));
+                        resolve(printers);
+                    } catch {
+                        resolve([]);
+                    }
+                }
+            );
+        } else if (platform === 'darwin') {
+            exec('lpstat -p -d', { timeout: 5000 }, (error, stdout) => {
+                if (error) {
+                    log.error('[Printers] macOS list error:', error.message);
+                    return resolve([]);
+                }
+                const printers: SystemPrinter[] = [];
+                const defaultMatch = stdout.match(/system default destination: (.+)/);
+                const defaultName = defaultMatch ? defaultMatch[1].trim() : '';
+
+                const lines = stdout.split('\n');
+                for (const line of lines) {
+                    const match = line.match(/^printer\s+(\S+)/);
+                    if (match) {
+                        printers.push({
+                            name: match[1],
+                            isDefault: match[1] === defaultName,
+                        });
+                    }
+                }
+                resolve(printers);
+            });
+        } else {
+            // Linux
+            exec('lpstat -p -d 2>/dev/null', { timeout: 5000 }, (error, stdout) => {
+                if (error) {
+                    log.error('[Printers] Linux list error:', error.message);
+                    return resolve([]);
+                }
+                const printers: SystemPrinter[] = [];
+                const defaultMatch = stdout.match(/system default destination: (.+)/);
+                const defaultName = defaultMatch ? defaultMatch[1].trim() : '';
+
+                const lines = stdout.split('\n');
+                for (const line of lines) {
+                    const match = line.match(/^printer\s+(\S+)/);
+                    if (match) {
+                        printers.push({
+                            name: match[1],
+                            isDefault: match[1] === defaultName,
+                        });
+                    }
+                }
+                resolve(printers);
+            });
+        }
+    });
+}
+
+// ─── Test Print (prints a test ticket) ──────────────────────────────────────
+
+export function buildTestTicket(storeName = 'OptimaPOS'): Buffer {
+    const now = new Date().toLocaleString('es-PE', { timeZone: 'America/Lima' });
+    const width = 48; // 80mm = 48 chars
+    const sep = '─'.repeat(width);
+
+    const lines: Buffer[] = [
+        CMD.INIT,
+        CMD.ALIGN_CENTER,
+        CMD.BOLD_ON,
+        CMD.DOUBLE_SIZE,
+        Buffer.from(`${storeName}\n`, 'utf-8'),
+        CMD.NORMAL_SIZE,
+        CMD.BOLD_OFF,
+        Buffer.from('\n', 'utf-8'),
+        CMD.ALIGN_CENTER,
+        CMD.BOLD_ON,
+        Buffer.from('TICKET DE PRUEBA\n', 'utf-8'),
+        CMD.BOLD_OFF,
+        Buffer.from(`${sep}\n`, 'utf-8'),
+        CMD.ALIGN_LEFT,
+        Buffer.from(`Fecha: ${now}\n`, 'utf-8'),
+        Buffer.from(`Impresora: Conectada OK\n`, 'utf-8'),
+        Buffer.from(`Ancho: 80mm (${width} chars)\n`, 'utf-8'),
+        Buffer.from(`${sep}\n`, 'utf-8'),
+        Buffer.from('\n', 'utf-8'),
+        CMD.ALIGN_CENTER,
+        Buffer.from('Caracteres especiales:\n', 'utf-8'),
+        CMD.ALIGN_LEFT,
+        Buffer.from('aeiou AEIOU 0123456789\n', 'utf-8'),
+        Buffer.from('S/ 100.50  $25.00  @#%&\n', 'utf-8'),
+        Buffer.from(`${sep}\n`, 'utf-8'),
+        Buffer.from('\n', 'utf-8'),
+        CMD.ALIGN_CENTER,
+        CMD.BOLD_ON,
+        Buffer.from('Impresion correcta!\n', 'utf-8'),
+        CMD.BOLD_OFF,
+        Buffer.from('www.optimapos.com\n', 'utf-8'),
+        CMD.FEED_LINES(4),
+        CMD.CUT_PARTIAL,
+    ];
+
+    return Buffer.concat(lines);
+}
+
+// ─── Build ESC/POS from text ────────────────────────────────────────────────
+
+export function textToEscPos(text: string): Buffer {
+    const lines = text.split('\n');
+    const buffers: Buffer[] = [CMD.INIT];
+
+    for (const line of lines) {
+        // Parse style annotations like [FONT:A STYLE:b SIZE:2x1]
+        let cleanLine = line;
+        const styleMatch = line.match(/\[FONT:(\w)\s*STYLE:(\w*)\s*SIZE:(\d)x(\d)\]/);
+
+        if (styleMatch) {
+            cleanLine = line.replace(/\[FONT:\w\s*STYLE:\w*\s*SIZE:\d+x\d+\]/, '').trim();
+            const font = styleMatch[1];
+            const style = styleMatch[2];
+            const scaleW = parseInt(styleMatch[3]);
+            const scaleH = parseInt(styleMatch[4]);
+
+            // Font
+            buffers.push(font === 'B' ? CMD.FONT_B : CMD.FONT_A);
+
+            // Bold
+            buffers.push(style.includes('b') ? CMD.BOLD_ON : CMD.BOLD_OFF);
+
+            // Underline
+            buffers.push(style.includes('u') ? CMD.UNDERLINE_ON : CMD.UNDERLINE_OFF);
+
+            // Size
+            const sizeCode = ((scaleW - 1) << 4) | (scaleH - 1);
+            buffers.push(Buffer.from([GS, 0x21, sizeCode]));
+        }
+
+        // Alignment
+        if (cleanLine.trim().length > 0) {
+            const trimmed = cleanLine.trimStart();
+            const leadingSpaces = cleanLine.length - trimmed.length;
+            const totalLen = cleanLine.trim().length;
+
+            // Heuristic: if centered (lots of leading space), use center align
+            if (leadingSpaces > 10 && leadingSpaces > totalLen * 0.3) {
+                buffers.push(CMD.ALIGN_CENTER);
+            } else if (leadingSpaces > 30) {
+                buffers.push(CMD.ALIGN_RIGHT);
+            } else {
+                buffers.push(CMD.ALIGN_LEFT);
+            }
+        }
+
+        buffers.push(Buffer.from(cleanLine + '\n', 'utf-8'));
+    }
+
+    // Reset and cut
+    buffers.push(CMD.NORMAL_SIZE);
+    buffers.push(CMD.BOLD_OFF);
+    buffers.push(CMD.ALIGN_LEFT);
+    buffers.push(CMD.FEED_LINES(3));
+    buffers.push(CMD.CUT_PARTIAL);
+
+    return Buffer.concat(buffers);
+}
+
+// ─── TCP Connection Test ────────────────────────────────────────────────────
+
+export function testTCPConnection(
+    ip: string,
+    port: number,
+    timeout = 3000
+): Promise<{ success: boolean; error?: string }> {
+    return new Promise((resolve) => {
+        const socket = new net.Socket();
+        let resolved = false;
+
+        const done = (result: { success: boolean; error?: string }) => {
+            if (resolved) return;
+            resolved = true;
+            socket.destroy();
+            resolve(result);
+        };
+
+        socket.setTimeout(timeout);
+        socket.on('connect', () => done({ success: true }));
+        socket.on('timeout', () => done({ success: false, error: 'Timeout de conexión' }));
+        socket.on('error', (err) => done({ success: false, error: err.message }));
+        socket.connect(port, ip);
+    });
+}

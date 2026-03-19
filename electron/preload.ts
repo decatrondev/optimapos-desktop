@@ -21,6 +21,35 @@ contextBridge.exposeInMainWorld('electronAPI', {
     printTicket: (ticketText: string, fileName: string): Promise<{ success: boolean; path?: string; error?: string }> =>
         ipcRenderer.invoke('print-ticket', ticketText, fileName),
 
+    // Printer — TCP (network)
+    printerPrintTCP: (ip: string, port: number, data: number[]): Promise<{ success: boolean; error?: string }> =>
+        ipcRenderer.invoke('printer-print-tcp', ip, port, data),
+    printerPrintTextTCP: (ip: string, port: number, text: string): Promise<{ success: boolean; error?: string }> =>
+        ipcRenderer.invoke('printer-print-text-tcp', ip, port, text),
+    printerTestTCP: (ip: string, port: number, storeName: string): Promise<{ success: boolean; error?: string }> =>
+        ipcRenderer.invoke('printer-test-tcp', ip, port, storeName),
+    printerTestConnection: (ip: string, port: number): Promise<{ success: boolean; error?: string }> =>
+        ipcRenderer.invoke('printer-test-connection', ip, port),
+
+    // Printer — USB (system driver)
+    printerPrintUSB: (printerName: string, data: number[]): Promise<{ success: boolean; error?: string }> =>
+        ipcRenderer.invoke('printer-print-usb', printerName, data),
+    printerPrintTextUSB: (printerName: string, text: string): Promise<{ success: boolean; error?: string }> =>
+        ipcRenderer.invoke('printer-print-text-usb', printerName, text),
+    printerTestUSB: (printerName: string, storeName: string): Promise<{ success: boolean; error?: string }> =>
+        ipcRenderer.invoke('printer-test-usb', printerName, storeName),
+
+    // Printer — Discovery
+    printerScanNetwork: (): Promise<Array<{ ip: string; port: number }>> =>
+        ipcRenderer.invoke('printer-scan-network'),
+    printerListSystem: (): Promise<Array<{ name: string; isDefault: boolean; portName?: string }>> =>
+        ipcRenderer.invoke('printer-list-system'),
+    onPrinterScanProgress: (callback: (data: { current: number; total: number }) => void): (() => void) => {
+        const handler = (_event: any, data: any) => callback(data);
+        ipcRenderer.on('printer-scan-progress', handler);
+        return () => ipcRenderer.removeListener('printer-scan-progress', handler);
+    },
+
     // Auto-Updater
     getAppVersion: (): Promise<string> => ipcRenderer.invoke('get-app-version'),
     updaterCheck: (): Promise<{ success: boolean; version?: string; error?: string }> =>
