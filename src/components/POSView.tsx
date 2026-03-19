@@ -26,19 +26,31 @@ const PAYMENT_METHODS: { key: PaymentMethod; label: string; icon: string }[] = [
 
 const CURRENCY = 'S/';
 
+/** Safely convert any value (string | number | Decimal) to a number */
+function num(v: any): number {
+    if (v == null) return 0;
+    const n = typeof v === 'number' ? v : parseFloat(String(v));
+    return isNaN(n) ? 0 : n;
+}
+
+/** Format a price for display */
+function fmt(v: any): string {
+    return num(v).toFixed(2);
+}
+
 function cartItemTotal(item: CartItem): number {
-    const addonTotal = item.addons.reduce((s, a) => s + a.price * a.quantity, 0);
-    return (item.basePrice + addonTotal) * item.quantity;
+    const addonTotal = item.addons.reduce((s, a) => s + num(a.price) * a.quantity, 0);
+    return (num(item.basePrice) + addonTotal) * item.quantity;
 }
 
 function getActivePrice(p: POSProduct): number {
     if (p.promoPrice != null && p.promoValidFrom && p.promoValidUntil) {
         const now = Date.now();
         if (now >= new Date(p.promoValidFrom).getTime() && now <= new Date(p.promoValidUntil).getTime()) {
-            return p.promoPrice;
+            return num(p.promoPrice);
         }
     }
-    return p.price;
+    return num(p.price);
 }
 
 interface POSViewProps {
@@ -159,7 +171,7 @@ export const POSView: React.FC<POSViewProps> = ({ token, serverUrl, locationId, 
     // ─── Cart calculations ──────────────────────────────────────────────────
     const subtotal = cart.reduce((s, item) => s + cartItemTotal(item), 0);
     const deliveryFee = orderType === 'DELIVERY'
-        ? deliveryBasePrice + (selectedZone?.surcharge || 0)
+        ? deliveryBasePrice + num(selectedZone?.surcharge)
         : 0;
     const discount = useMemo(() => {
         if (!promoResult?.valid || !promoResult.discountCode) return 0;
@@ -177,7 +189,7 @@ export const POSView: React.FC<POSViewProps> = ({ token, serverUrl, locationId, 
     // ─── Add product to cart ────────────────────────────────────────────────
     const addProduct = useCallback((product: POSProduct, variantId?: number) => {
         const variant = variantId ? product.variants.find(v => v.id === variantId) : undefined;
-        const price = variant ? variant.price : getActivePrice(product);
+        const price = variant ? num(variant.price) : getActivePrice(product);
         const name = product.name;
         const vName = variant?.name || null;
         const cartId = `p-${product.id}-${variantId || 'base'}`;
@@ -220,7 +232,7 @@ export const POSView: React.FC<POSViewProps> = ({ token, serverUrl, locationId, 
             }
             return [...prev, {
                 cartId, comboId: combo.id,
-                name: combo.name, variantName: null, basePrice: combo.price,
+                name: combo.name, variantName: null, basePrice: num(combo.price),
                 quantity: 1, addons: [], notes: '',
             }];
         });
@@ -230,14 +242,14 @@ export const POSView: React.FC<POSViewProps> = ({ token, serverUrl, locationId, 
     const confirmAddons = useCallback(() => {
         if (!addonProduct) return;
         const variant = addonVariantId ? addonProduct.variants.find(v => v.id === addonVariantId) : undefined;
-        const price = variant ? variant.price : getActivePrice(addonProduct);
+        const price = variant ? num(variant.price) : getActivePrice(addonProduct);
         const selectedAddons = Object.entries(addonSelections)
             .filter(([, qty]) => qty > 0)
             .map(([id, qty]) => {
                 const addonId = parseInt(id);
                 for (const ag of addonProduct.addonGroups) {
                     const found = ag.addonGroup.addons.find(a => a.id === addonId);
-                    if (found) return { addonId, name: found.name, price: found.price, quantity: qty };
+                    if (found) return { addonId, name: found.name, price: num(found.price), quantity: qty };
                 }
                 return null;
             })
@@ -489,7 +501,7 @@ export const POSView: React.FC<POSViewProps> = ({ token, serverUrl, locationId, 
                 <div className="pos__grid">
                     {activeCategory !== 'combos' && filteredProducts.map(product => {
                         const price = getActivePrice(product);
-                        const hasPromo = price < product.price;
+                        const hasPromo = price < num(product.price);
                         const outOfStock = product.stockEnabled && product.stockCurrent <= 0;
                         return (
                             <button
@@ -516,8 +528,8 @@ export const POSView: React.FC<POSViewProps> = ({ token, serverUrl, locationId, 
                                 <div className="pos__product-info">
                                     <span className="pos__product-name">{product.name}</span>
                                     <span className="pos__product-price">
-                                        {hasPromo && <span className="pos__product-old-price">{CURRENCY}{product.price.toFixed(2)}</span>}
-                                        {CURRENCY}{price.toFixed(2)}
+                                        {hasPromo && <span className="pos__product-old-price">{CURRENCY}{fmt(product.price)}</span>}
+                                        {CURRENCY}{fmt(price)}
                                     </span>
                                 </div>
                                 {product.stockEnabled && (
@@ -533,7 +545,7 @@ export const POSView: React.FC<POSViewProps> = ({ token, serverUrl, locationId, 
                                                 className="pos__variant-btn"
                                                 onClick={(e) => { e.stopPropagation(); addProduct(product, v.id); }}
                                             >
-                                                {v.name} {CURRENCY}{v.price.toFixed(2)}
+                                                {v.name} {CURRENCY}{fmt(v.price)}
                                             </button>
                                         ))}
                                     </div>
@@ -555,7 +567,7 @@ export const POSView: React.FC<POSViewProps> = ({ token, serverUrl, locationId, 
                             )}
                             <div className="pos__product-info">
                                 <span className="pos__product-name">{combo.name}</span>
-                                <span className="pos__product-price">{CURRENCY}{combo.price.toFixed(2)}</span>
+                                <span className="pos__product-price">{CURRENCY}{fmt(combo.price)}</span>
                             </div>
                             <span className="pos__product-badge">COMBO</span>
                         </button>
@@ -591,7 +603,7 @@ export const POSView: React.FC<POSViewProps> = ({ token, serverUrl, locationId, 
                         </button>
                         {openOrder && (
                             <div className="pos__open-order">
-                                Pedido abierto: #{openOrder.code} — {CURRENCY}{parseFloat(openOrder.total || 0).toFixed(2)}
+                                Pedido abierto: #{openOrder.code} — {CURRENCY}{fmt(openOrder.total)}
                             </div>
                         )}
                     </div>
@@ -610,7 +622,7 @@ export const POSView: React.FC<POSViewProps> = ({ token, serverUrl, locationId, 
                         >
                             <option value="">Zona de entrega...</option>
                             {zones.map(z => (
-                                <option key={z.id} value={z.id}>{z.name} (+{CURRENCY}{z.surcharge.toFixed(2)})</option>
+                                <option key={z.id} value={z.id}>{z.name} (+{CURRENCY}{fmt(z.surcharge)})</option>
                             ))}
                         </select>
                         <input className="pos__input" placeholder="Nombre" value={guestName} onChange={e => setGuestName(e.target.value)} />
@@ -851,7 +863,7 @@ export const POSView: React.FC<POSViewProps> = ({ token, serverUrl, locationId, 
                                     return (
                                         <div key={addon.id} className="pos__addon-row">
                                             <span className="pos__addon-name">{addon.name}</span>
-                                            <span className="pos__addon-price">+{CURRENCY}{addon.price.toFixed(2)}</span>
+                                            <span className="pos__addon-price">+{CURRENCY}{fmt(addon.price)}</span>
                                             <div className="pos__addon-qty">
                                                 <button
                                                     className="pos__qty-btn"
@@ -883,7 +895,7 @@ export const POSView: React.FC<POSViewProps> = ({ token, serverUrl, locationId, 
                         <span className="pos__success-icon">✅</span>
                         <h2>Pedido creado</h2>
                         <p className="pos__success-code">#{successOrder.code}</p>
-                        <p className="pos__success-total">{CURRENCY}{parseFloat(successOrder.total || 0).toFixed(2)}</p>
+                        <p className="pos__success-total">{CURRENCY}{fmt(successOrder.total)}</p>
                     </div>
                 </div>
             )}
