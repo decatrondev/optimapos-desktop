@@ -247,18 +247,111 @@ function renderBarcode(el: TemplateElement, order: Order, lineWidth: number): st
     ];
 }
 
+// ─── Variable Resolution ─────────────────────────────────────────────────────
+
+function resolveVariables(text: string, vars: Record<string, string>): string {
+    return text.replace(/\{\{([^}]+)\}\}/g, (_match, key) => {
+        return vars[key.trim()] ?? '';
+    });
+}
+
+function buildVariables(order: Order, storeName?: string): Record<string, string> {
+    const vars: Record<string, string> = {};
+    vars['tienda_nombre'] = storeName || '';
+    vars['tienda_ruc'] = '';
+    vars['tienda_direccion'] = '';
+    vars['tienda_telefono'] = '';
+    vars['local_nombre'] = '';
+
+    if (order) {
+        vars['pedido_codigo'] = order.code || '';
+        vars['pedido_fecha'] = order.createdAt ? formatDate(order.createdAt) : '';
+        vars['pedido_hora'] = order.createdAt ? new Date(order.createdAt).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: true }) : '';
+        vars['pedido_tipo'] = order.type === 'DELIVERY' ? 'Delivery' : order.type === 'DINE_IN' ? 'Mesa' : 'Recojo';
+        vars['pedido_mesa'] = (order as any).tableNumber || (order as any).table?.name || '';
+        vars['pedido_notas'] = order.notes || '';
+        vars['cliente_nombre'] = order.user?.name || order.guestName || 'Cliente';
+        vars['cliente_telefono'] = order.user?.phone || order.guestPhone || '';
+        vars['cliente_direccion'] = order.guestAddress || '';
+        vars['pago_metodo'] = (order as any).paymentMethod || '';
+        vars['subtotal'] = formatMoney(order.subtotal);
+        vars['descuento'] = formatMoney(order.discount);
+        vars['delivery_fee'] = formatMoney(order.deliveryFee);
+        vars['total'] = formatMoney(order.total);
+        vars['cajero_nombre'] = (order as any).vendorName || '';
+    }
+
+    vars['fecha_actual'] = formatDate(new Date().toISOString());
+    return vars;
+}
+
+function buildVariablesFromData(data: Record<string, any>): Record<string, string> {
+    const vars: Record<string, string> = {};
+    vars['tienda_nombre'] = '';
+    vars['tienda_ruc'] = '';
+    vars['tienda_direccion'] = '';
+    vars['tienda_telefono'] = '';
+    vars['local_nombre'] = '';
+
+    if (data.order) {
+        const o = data.order;
+        vars['pedido_codigo'] = o.code || '';
+        vars['pedido_fecha'] = o.createdAt ? formatDate(o.createdAt) : '';
+        vars['pedido_hora'] = o.createdAt ? new Date(o.createdAt).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: true }) : '';
+        vars['pedido_tipo'] = o.type === 'DELIVERY' ? 'Delivery' : o.type === 'DINE_IN' ? 'Mesa' : 'Recojo';
+        vars['pedido_mesa'] = o.tableNumber || '';
+        vars['pedido_notas'] = o.notes || '';
+        vars['cliente_nombre'] = o.clientName || o.guestName || '';
+        vars['cliente_telefono'] = o.clientPhone || o.guestPhone || '';
+        vars['cliente_direccion'] = o.clientAddress || o.guestAddress || '';
+        vars['pago_metodo'] = o.paymentMethod || '';
+        vars['subtotal'] = formatMoney(o.subtotal);
+        vars['descuento'] = formatMoney(o.discount);
+        vars['delivery_fee'] = formatMoney(o.deliveryFee);
+        vars['total'] = formatMoney(o.total);
+        vars['cajero_nombre'] = o.vendorName || '';
+    }
+
+    if (data.cashRegister) {
+        const c = data.cashRegister;
+        vars['caja_apertura'] = formatMoney(c.openingAmount);
+        vars['caja_total'] = formatMoney(c.closingAmount);
+        vars['caja_total_ventas'] = formatMoney(c.totalSales);
+        vars['caja_num_ordenes'] = String(c.totalOrders || 0);
+        vars['cajero_nombre'] = c.userName || vars['cajero_nombre'] || '';
+        vars['local_nombre'] = c.locationName || '';
+    }
+
+    vars['fecha_actual'] = formatDate(new Date().toISOString());
+    return vars;
+}
+
+function formatMoney(value: any): string {
+    if (value == null) return '0.00';
+    const num = typeof value === 'string' ? parseFloat(value) : Number(value);
+    return isNaN(num) ? '0.00' : num.toFixed(2);
+}
+
 // ─── Main Renderer ────────────────────────────────────────────────────────────
 
-export function renderTemplate(
-    template: TicketTemplate,
-    order: Order,
-    currencySymbol: string
-): string {
-    const lineWidth = getLineWidth(template.width);
+function renderElements(
+    elements: TemplateElement[],
+    order: Order | null,
+    currencySymbol: string,
+    lineWidth: number,
+    vars: Record<string, string>
+): string[] {
     const allLines: string[] = [];
 
-    for (const el of template.content.elements) {
+    for (const rawEl of elements) {
+        // Resolve variables in text/header content
+        const el = { ...rawEl } as any;
+        if (el.content && typeof el.content === 'string') {
+            el.content = resolveVariables(el.content, vars);
+        }
+
         let lines: string[] = [];
+        const fakeOrder = order || ({} as Order);
 
         switch (el.type) {
             case 'image':
@@ -275,16 +368,22 @@ export function renderTemplate(
                 lines = renderSeparator(el, lineWidth);
                 break;
             case 'order_info':
-                lines = renderOrderInfo(el, order, lineWidth);
+                lines = renderOrderInfo(el, fakeOrder, lineWidth);
                 break;
             case 'items_list':
-                lines = renderItemsList(el, order, currencySymbol, lineWidth);
+                lines = renderItemsList(el, fakeOrder, currencySymbol, lineWidth);
                 break;
             case 'totals':
-                lines = renderTotals(el, order, currencySymbol, lineWidth);
+                lines = renderTotals(el, fakeOrder, currencySymbol, lineWidth);
                 break;
             case 'barcode':
-                lines = renderBarcode(el, order, lineWidth);
+                lines = renderBarcode(el, fakeOrder, lineWidth);
+                break;
+            case 'spacer':
+                lines = ['\n'.repeat((el.spacerHeight || 1) - 1)];
+                break;
+            case 'cut':
+                lines = ['[CUT]'];
                 break;
             default:
                 break;
@@ -294,5 +393,32 @@ export function renderTemplate(
         allLines.push('');
     }
 
-    return allLines.join('\n');
+    return allLines;
+}
+
+export function renderTemplate(
+    template: TicketTemplate,
+    order: Order,
+    currencySymbol: string
+): string {
+    const lineWidth = getLineWidth(template.width);
+    const vars = buildVariables(order, '');
+    const lines = renderElements(template.content.elements, order, currencySymbol, lineWidth, vars);
+    return lines.join('\n');
+}
+
+/**
+ * Render a print job (from WebSocket) to formatted ESC/POS text.
+ * Uses job.data for variable resolution and job.template for layout.
+ */
+export function renderPrintJob(
+    job: { template: { width: number; content: any }; data: Record<string, any> },
+    currencySymbol: string
+): string {
+    const lineWidth = getLineWidth(job.template.width);
+    const vars = buildVariablesFromData(job.data);
+    const order = job.data.order || null;
+    const elements = job.template.content?.elements || [];
+    const lines = renderElements(elements, order, currencySymbol, lineWidth, vars);
+    return lines.join('\n');
 }

@@ -347,16 +347,17 @@ export function textToEscPos(text: string): Buffer {
     const buffers: Buffer[] = [CMD.INIT];
 
     for (const line of lines) {
-        // Parse style annotations like [FONT:A STYLE:b SIZE:2x1]
+        // Parse style annotations like [FONT:A STYLE:b SIZE:2x1 ALIGN:CT]
         let cleanLine = line;
-        const styleMatch = line.match(/\[FONT:(\w)\s*STYLE:(\w*)\s*SIZE:(\d)x(\d)\]/);
+        const styleMatch = line.match(/\[FONT:(\w)\s*STYLE:([\w,]*)\s*SIZE:(\d)x(\d)(?:\s*ALIGN:(\w+))?\]/);
 
         if (styleMatch) {
-            cleanLine = line.replace(/\[FONT:\w\s*STYLE:\w*\s*SIZE:\d+x\d+\]/, '').trim();
+            cleanLine = line.replace(/\[FONT:\w\s*STYLE:[\w,]*\s*SIZE:\d+x\d+(?:\s*ALIGN:\w+)?\]/, '').trim();
             const font = styleMatch[1];
             const style = styleMatch[2];
             const scaleW = parseInt(styleMatch[3]);
             const scaleH = parseInt(styleMatch[4]);
+            const align = styleMatch[5]; // LT, CT, RT
 
             // Font
             buffers.push(font === 'B' ? CMD.FONT_B : CMD.FONT_A);
@@ -370,15 +371,44 @@ export function textToEscPos(text: string): Buffer {
             // Size
             const sizeCode = ((scaleW - 1) << 4) | (scaleH - 1);
             buffers.push(Buffer.from([GS, 0x21, sizeCode]));
+
+            // Explicit alignment from tag
+            if (align === 'CT') {
+                buffers.push(CMD.ALIGN_CENTER);
+            } else if (align === 'RT') {
+                buffers.push(CMD.ALIGN_RIGHT);
+            } else if (align === 'LT') {
+                buffers.push(CMD.ALIGN_LEFT);
+            }
         }
 
-        // Alignment
-        if (cleanLine.trim().length > 0) {
+        // Inline alignment overrides (e.g. [SIZE:2x2] or [STYLE:b] without full tag)
+        const inlineSize = cleanLine.match(/\[SIZE:(\d)x(\d)\]/);
+        if (inlineSize) {
+            cleanLine = cleanLine.replace(/\[SIZE:\d+x\d+\]/, '').trim();
+            const sw = parseInt(inlineSize[1]);
+            const sh = parseInt(inlineSize[2]);
+            buffers.push(Buffer.from([GS, 0x21, ((sw - 1) << 4) | (sh - 1)]));
+        }
+
+        const inlineStyle = cleanLine.match(/\[STYLE:(\w+)\]/);
+        if (inlineStyle) {
+            cleanLine = cleanLine.replace(/\[STYLE:\w+\]/, '').trim();
+            buffers.push(inlineStyle[1].includes('b') ? CMD.BOLD_ON : CMD.BOLD_OFF);
+        }
+
+        const inlineFont = cleanLine.match(/\[FONT:(\w)\]/);
+        if (inlineFont) {
+            cleanLine = cleanLine.replace(/\[FONT:\w\]/, '').trim();
+            buffers.push(inlineFont[1] === 'B' ? CMD.FONT_B : CMD.FONT_A);
+        }
+
+        // Fallback alignment heuristic (only if no explicit align was set)
+        if (!styleMatch && cleanLine.trim().length > 0) {
             const trimmed = cleanLine.trimStart();
             const leadingSpaces = cleanLine.length - trimmed.length;
             const totalLen = cleanLine.trim().length;
 
-            // Heuristic: if centered (lots of leading space), use center align
             if (leadingSpaces > 10 && leadingSpaces > totalLen * 0.3) {
                 buffers.push(CMD.ALIGN_CENTER);
             } else if (leadingSpaces > 30) {

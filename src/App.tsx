@@ -27,8 +27,9 @@ import { printTicket } from './services/printer.service';
 import { socketService } from './services/socket.service';
 import {
     fetchRules, fetchTemplate, matchRulesForOrder,
-    getStoredPrinterId,
+    getStoredPrinterId, fetchPrinters,
 } from './services/printer-config.service';
+import { executePrintJob, quickPrint } from './services/print-executor';
 
 const CURRENCY_SYMBOL = 'S/';
 
@@ -66,6 +67,7 @@ const OperationalView: React.FC<{
     const { orders, isConnected, hasNewAlert, printJobs, dismissAlert, updateOrderLocally, removeOrder, clearPrintJob } = useSocket(serverUrl, token, socketLocId);
     const [initialOrders, setInitialOrders] = useState<Order[]>([]);
     const [rules, setRules] = useState<PrintRule[]>([]);
+    const [printerConfig, setPrinterConfig] = useState<import('./types/printer-config').Printer | null>(null);
     const [ticketPreview, setTicketPreview] = useState<{ order: Order; template: TicketTemplate } | null>(null);
     const [activePrintJob, setActivePrintJob] = useState<PrintJob | null>(null);
 
@@ -121,16 +123,31 @@ const OperationalView: React.FC<{
                 console.log(`[PrintConfig] Loaded ${r.length} rules`);
                 setRules(r);
             }).catch(e => console.error('[PrintConfig] Load failed:', e));
+
+            // Fetch this terminal's printer config for hardware printing
+            const locId = appConfig?.locationId && appConfig.locationId > 0 ? appConfig.locationId : undefined;
+            fetchPrinters(token, locId).then(printers => {
+                const myPrinter = printers.find(p => p.id === printerId) || printers.find(p => p.isDefault) || null;
+                if (myPrinter) {
+                    console.log(`[PrintConfig] Active printer: "${myPrinter.name}" (${myPrinter.type} ${myPrinter.address})`);
+                    setPrinterConfig(myPrinter);
+                }
+            }).catch(e => console.error('[PrintConfig] Printers load failed:', e));
         }
 
         return () => clearInterval(pollInterval);
     }, [token, userRole]);
 
-    // Process print jobs
+    // Process print jobs — autoPrint sends to hardware, manual shows preview
     useEffect(() => {
         for (const job of printJobs) {
             if (job.rule.autoPrint) {
-                console.log(`[AutoPrint] Acknowledging: ${job.jobId} | ${job.event} → ${job.printer.name}`);
+                console.log(`[AutoPrint] Executing: ${job.jobId} | ${job.event} → ${job.printer.name}`);
+                executePrintJob(job).then(result => {
+                    if (!result.success) {
+                        console.error(`[AutoPrint] Failed: ${result.error}`);
+                    }
+                });
                 clearPrintJob(job.jobId);
             }
         }
@@ -198,10 +215,23 @@ const OperationalView: React.FC<{
 
     const handleTicketPrint = useCallback(async () => {
         if (!ticketPreview) return;
-        const { printFromTemplate } = await import('./services/printer.service');
-        await printFromTemplate(ticketPreview.order, ticketPreview.template, CURRENCY_SYMBOL);
+        // Use hardware printing if printer config is available
+        if (printerConfig && window.electronAPI) {
+            const result = await quickPrint(
+                ticketPreview.template,
+                ticketPreview.order,
+                { type: printerConfig.type, address: printerConfig.address, port: printerConfig.port }
+            );
+            if (!result.success) {
+                console.error('[Print] Hardware print failed:', result.error);
+            }
+        } else {
+            // Fallback to file output
+            const { printFromTemplate } = await import('./services/printer.service');
+            await printFromTemplate(ticketPreview.order, ticketPreview.template, CURRENCY_SYMBOL);
+        }
         setTicketPreview(null);
-    }, [ticketPreview]);
+    }, [ticketPreview, printerConfig]);
 
     const locationMap = isAllLocations ? Object.fromEntries(locations.map(l => [l.id, l.name])) : undefined;
     const activeCount = mergedOrders.filter(o => o.status !== 'DELIVERED' && o.status !== 'CANCELLED').length;
@@ -342,8 +372,12 @@ const OperationalView: React.FC<{
                         clearPrintJob(activePrintJob.jobId);
                         setActivePrintJob(null);
                     }}
-                    onPrint={() => {
+                    onPrint={async () => {
                         console.log(`[Print] Manual print for job: ${activePrintJob.jobId}`);
+                        const result = await executePrintJob(activePrintJob);
+                        if (!result.success) {
+                            console.error(`[Print] Manual print failed: ${result.error}`);
+                        }
                         clearPrintJob(activePrintJob.jobId);
                         setActivePrintJob(null);
                     }}

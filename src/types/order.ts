@@ -144,6 +144,29 @@ export interface ElectronAPI {
     getPrinterId: () => Promise<number | null>;
     getEnvConfig: () => Promise<{ socketUrl: string; storeName: string; currencySymbol: string }>;
     printTicket: (ticketText: string, fileName: string) => Promise<{ success: boolean; path?: string; error?: string }>;
+
+    // Printer — TCP (network)
+    printerPrintTCP: (ip: string, port: number, data: number[]) => Promise<{ success: boolean; error?: string }>;
+    printerPrintTextTCP: (ip: string, port: number, text: string) => Promise<{ success: boolean; error?: string }>;
+    printerTestTCP: (ip: string, port: number, storeName: string) => Promise<{ success: boolean; error?: string }>;
+    printerTestConnection: (ip: string, port: number) => Promise<{ success: boolean; error?: string }>;
+
+    // Printer — USB (system driver)
+    printerPrintUSB: (printerName: string, data: number[]) => Promise<{ success: boolean; error?: string }>;
+    printerPrintTextUSB: (printerName: string, text: string) => Promise<{ success: boolean; error?: string }>;
+    printerTestUSB: (printerName: string, storeName: string) => Promise<{ success: boolean; error?: string }>;
+
+    // Printer — Discovery
+    printerScanNetwork: () => Promise<Array<{ ip: string; port: number }>>;
+    printerListSystem: () => Promise<Array<{ name: string; isDefault: boolean; portName?: string }>>;
+    onPrinterScanProgress: (callback: (data: { current: number; total: number }) => void) => () => void;
+
+    // Auto-Updater
+    getAppVersion: () => Promise<string>;
+    updaterCheck: () => Promise<{ success: boolean; version?: string; error?: string }>;
+    updaterDownload: () => Promise<{ success: boolean; error?: string }>;
+    updaterInstall: () => Promise<void>;
+    onUpdaterStatus: (callback: (data: any) => void) => () => void;
 }
 
 declare global {
