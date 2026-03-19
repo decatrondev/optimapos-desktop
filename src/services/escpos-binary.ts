@@ -242,7 +242,8 @@ function getItemName(item: any): string {
 async function loadImageAsMonoBitmap(
     src: string,
     serverUrl: string,
-    maxWidth: number
+    templateWidth: number,
+    imageSize?: number
 ): Promise<number[] | null> {
     try {
         let url = src;
@@ -258,14 +259,28 @@ async function loadImageAsMonoBitmap(
             img.src = url;
         });
 
-        // Scale to fit printer width (maxWidth in dots, 80mm ≈ 576 dots, 58mm ≈ 384 dots)
-        const maxDots = maxWidth === 80 ? 576 : 384;
+        const maxDots = templateWidth === 80 ? 576 : 384;
         let w = img.naturalWidth;
         let h = img.naturalHeight;
+
+        // Use imageSize as target height (same as web preview pixel height)
+        // Scale proportionally, then cap to paper width
+        const targetHeight = imageSize || 64;
+        // Convert web px to printer dots: ~3 dots per CSS px gives a good match
+        const targetDots = Math.round(targetHeight * 3);
+
+        if (h > 0) {
+            const scale = targetDots / h;
+            w = Math.round(w * scale);
+            h = targetDots;
+        }
+
+        // Cap to paper width
         if (w > maxDots) {
             h = Math.round(h * (maxDots / w));
             w = maxDots;
         }
+
         // Width must be multiple of 8
         w = Math.floor(w / 8) * 8;
         if (w === 0 || h === 0) return null;
@@ -373,20 +388,59 @@ function barcodeBytes(data: string, height?: number): number[] {
 
 // ─── Element Renderers ──────────────────────────────────────────────────────
 
-function renderHeader(el: TemplateElement, vars: Record<string, string>, lw: number): number[] {
-    const content = resolveVars((el as any).content || '', vars);
-    return [...applyStyle(el), ...line(content), ...resetStyle()];
+/**
+ * Get effective line width when text is scaled.
+ * ESC/POS doubles character width per scaleW step, so fewer chars fit per line.
+ */
+function effectiveWidth(lw: number, scaleW: number): number {
+    return Math.floor(lw / (scaleW || 1));
 }
 
-function renderText(el: TemplateElement, vars: Record<string, string>, lw: number): number[] {
+function renderHeader(el: TemplateElement, vars: Record<string, string>, lw: number): number[] {
     const content = resolveVars((el as any).content || '', vars);
+    const ew = effectiveWidth(lw, el.scaleW || 1);
     const bytes: number[] = [...applyStyle(el)];
-    const lines = content.split('\n');
-    for (const l of lines) {
+    // Wrap long text to effective width
+    const wrapped = wrapText(content, ew);
+    for (const l of wrapped) {
         bytes.push(...line(l));
     }
     bytes.push(...resetStyle());
     return bytes;
+}
+
+function renderText(el: TemplateElement, vars: Record<string, string>, lw: number): number[] {
+    const content = resolveVars((el as any).content || '', vars);
+    const ew = effectiveWidth(lw, el.scaleW || 1);
+    const bytes: number[] = [...applyStyle(el)];
+    const lines = content.split('\n');
+    for (const l of lines) {
+        const wrapped = wrapText(l, ew);
+        for (const wl of wrapped) {
+            bytes.push(...line(wl));
+        }
+    }
+    bytes.push(...resetStyle());
+    return bytes;
+}
+
+/** Wrap text to fit within a given character width */
+function wrapText(text: string, maxWidth: number): string[] {
+    if (text.length <= maxWidth) return [text];
+    const result: string[] = [];
+    let remaining = text;
+    while (remaining.length > 0) {
+        if (remaining.length <= maxWidth) {
+            result.push(remaining);
+            break;
+        }
+        // Try to break at last space within maxWidth
+        let breakAt = remaining.lastIndexOf(' ', maxWidth);
+        if (breakAt <= 0) breakAt = maxWidth;
+        result.push(remaining.substring(0, breakAt));
+        remaining = remaining.substring(breakAt).trimStart();
+    }
+    return result;
 }
 
 function renderSeparator(el: TemplateElement, lw: number): number[] {
@@ -414,12 +468,13 @@ async function renderImage(
     if (!src) return [];
 
     const align = el.align || 'center';
+    const imageSize = (el as any).imageSize;
     const bytes: number[] = [];
     if (align === 'center') bytes.push(...cmd.alignCenter);
     else if (align === 'right') bytes.push(...cmd.alignRight);
     else bytes.push(...cmd.alignLeft);
 
-    const imgBytes = await loadImageAsMonoBitmap(src, serverUrl, templateWidth);
+    const imgBytes = await loadImageAsMonoBitmap(src, serverUrl, templateWidth, imageSize);
     if (imgBytes) {
         bytes.push(...imgBytes);
     }
@@ -435,9 +490,10 @@ function renderOrderInfo(el: TemplateElement, order: any, lw: number): number[] 
 
     // Mesa in double size if showTable
     if ((el as any).showTable !== false && (order.tableNumber || order.table?.name)) {
+        const mesaText = 'MESA: ' + (order.tableNumber || order.table?.name || '');
         bytes.push(...cmd.alignCenter, ...cmd.size(2, 2), ...cmd.boldOn);
-        bytes.push(...line('MESA: ' + (order.tableNumber || order.table?.name || '')));
-        bytes.push(...cmd.normalSize, ...cmd.boldOff);
+        bytes.push(...line(mesaText));
+        bytes.push(...cmd.normalSize, ...cmd.boldOff, LF);
         bytes.push(...applyStyle(el));
     }
 
@@ -548,7 +604,8 @@ function renderTotals(
 
     bytes.push(...line('-'.repeat(lw)));
     bytes.push(...cmd.boldOn, ...cmd.size(2, 1));
-    bytes.push(...line(rowText('TOTAL:', currencySymbol + formatMoney(order.total), Math.floor(lw / 2))));
+    const totalLw = effectiveWidth(lw, 2);
+    bytes.push(...line(rowText('TOTAL:', currencySymbol + formatMoney(order.total), totalLw)));
     bytes.push(...cmd.normalSize, ...cmd.boldOff);
 
     bytes.push(...resetStyle());
