@@ -1,9 +1,10 @@
-name: Build & Release
+name: CI
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
   build:
@@ -37,10 +38,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Type check
+        run: npx tsc --noEmit && npx tsc -p tsconfig.electron.json --noEmit
+
       - name: Build app
         run: npm run build
 
-      - name: Build & publish installers
-        run: npx electron-builder --${{ matrix.platform }} --publish always
+      - name: Package (dry run, no publish)
+        run: npx electron-builder --${{ matrix.platform }} --dir
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
