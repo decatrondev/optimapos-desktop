@@ -1,6 +1,5 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { Order, OrderItem, OrderStatus } from '../types/order';
-import { getNextStatus, updateOrderStatus } from '../services/order.service';
 
 interface KitchenKanbanProps {
     orders: Order[];
@@ -24,6 +23,10 @@ function getItemName(item: OrderItem): string {
     if (item.combo) return item.combo.name;
     if (item.variant) return item.variant.name;
     return 'Producto';
+}
+
+function getItemCategory(item: OrderItem): string | null {
+    return item.product?.category?.name || item.combo?.category?.name || null;
 }
 
 function OrderTimer({ createdAt }: { createdAt: string }) {
@@ -55,7 +58,8 @@ const KanbanCard: React.FC<{
     onRemove: (orderId: number) => void;
     onPrint?: (order: Order) => void;
     locationLabel?: string;
-}> = ({ order, currencySymbol, onAdvance, onRemove, onPrint, locationLabel }) => {
+    highlightCategories?: Set<string>;
+}> = ({ order, currencySymbol, onAdvance, onRemove, onPrint, locationLabel, highlightCategories }) => {
     const [advancing, setAdvancing] = useState(false);
 
     const typeLabel = order.type === 'DELIVERY' ? '🛵 Delivery' : order.type === 'DINE_IN' ? '🍽️ Mesa' : '🏪 Recojo';
@@ -100,22 +104,26 @@ const KanbanCard: React.FC<{
             )}
 
             <div className="kanban-card__items">
-                {order.items.map((item, idx) => (
-                    <div key={item.id || idx} className="kanban-card__item">
-                        <span className="kanban-card__item-qty">{item.quantity}x</span>
-                        <span className="kanban-card__item-name">{getItemName(item)}</span>
-                        {item.addons.length > 0 && (
-                            <div className="kanban-card__addons">
-                                {item.addons.map((a, i) => (
-                                    <span key={a.id || i} className="kanban-card__addon">
-                                        + {a.addon.name}{a.quantity > 1 ? ` x${a.quantity}` : ''}
-                                    </span>
-                                ))}
-                            </div>
-                        )}
-                        {item.notes && <div className="kanban-card__item-note">📝 {item.notes}</div>}
-                    </div>
-                ))}
+                {order.items.map((item, idx) => {
+                    const cat = getItemCategory(item);
+                    const dimmed = highlightCategories && highlightCategories.size > 0 && cat && !highlightCategories.has(cat);
+                    return (
+                        <div key={item.id || idx} className={`kanban-card__item ${dimmed ? 'kanban-card__item--dimmed' : ''}`}>
+                            <span className="kanban-card__item-qty">{item.quantity}x</span>
+                            <span className="kanban-card__item-name">{getItemName(item)}</span>
+                            {item.addons.length > 0 && (
+                                <div className="kanban-card__addons">
+                                    {item.addons.map((a, i) => (
+                                        <span key={a.id || i} className="kanban-card__addon">
+                                            + {a.addon.name}{a.quantity > 1 ? ` x${a.quantity}` : ''}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+                            {item.notes && <div className="kanban-card__item-note">📝 {item.notes}</div>}
+                        </div>
+                    );
+                })}
             </div>
 
             {order.notes && (
@@ -142,19 +150,74 @@ const KanbanCard: React.FC<{
 export const KitchenKanban: React.FC<KitchenKanbanProps> = ({
     orders, currencySymbol, onAdvanceStatus, onRemove, onPrint, locationMap,
 }) => {
+    const [stationFilter, setStationFilter] = useState<string | null>(null);
+    const [isFullscreen, setIsFullscreen] = useState(false);
+
+    // Extract unique category names from all order items for station filter
+    const allCategories = useMemo(() => {
+        const cats = new Set<string>();
+        for (const order of orders) {
+            for (const item of order.items) {
+                const cat = getItemCategory(item);
+                if (cat) cats.add(cat);
+            }
+        }
+        return Array.from(cats).sort();
+    }, [orders]);
+
+    // Fullscreen toggle with F11
+    useEffect(() => {
+        const handleKey = (e: KeyboardEvent) => {
+            if (e.key === 'F11') {
+                e.preventDefault();
+                toggleFullscreen();
+            }
+        };
+        window.addEventListener('keydown', handleKey);
+        return () => window.removeEventListener('keydown', handleKey);
+    }, []);
+
+    // Sync fullscreen state with actual fullscreen changes
+    useEffect(() => {
+        const onFsChange = () => setIsFullscreen(!!document.fullscreenElement);
+        document.addEventListener('fullscreenchange', onFsChange);
+        return () => document.removeEventListener('fullscreenchange', onFsChange);
+    }, []);
+
+    const toggleFullscreen = useCallback(() => {
+        if (document.fullscreenElement) {
+            document.exitFullscreen().catch(() => {});
+        } else {
+            document.documentElement.requestFullscreen().catch(() => {});
+        }
+    }, []);
+
     const getLocationLabel = (order: Order) => {
         if (!locationMap || !order.locationId) return undefined;
         return locationMap[order.locationId];
     };
 
+    // Filter orders: if station filter is active, only show orders that have items in that category
+    const filteredOrders = useMemo(() => {
+        if (!stationFilter) return orders;
+        return orders.filter(o =>
+            o.items.some(item => getItemCategory(item) === stationFilter)
+        );
+    }, [orders, stationFilter]);
+
+    const highlightCategories = useMemo(
+        () => stationFilter ? new Set([stationFilter]) : new Set<string>(),
+        [stationFilter]
+    );
+
     const columnOrders = (statuses: OrderStatus[]) =>
-        orders
+        filteredOrders
             .filter(o => statuses.includes(o.status))
             .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
-    const activeCount = orders.filter(o => o.status !== 'DELIVERED' && o.status !== 'CANCELLED').length;
+    const activeCount = filteredOrders.filter(o => o.status !== 'DELIVERED' && o.status !== 'CANCELLED').length;
 
-    if (activeCount === 0 && orders.length === 0) {
+    if (activeCount === 0 && filteredOrders.length === 0 && !stationFilter) {
         return (
             <main className="kanban">
                 <div className="kanban__empty">
@@ -168,7 +231,50 @@ export const KitchenKanban: React.FC<KitchenKanbanProps> = ({
     }
 
     return (
-        <main className="kanban">
+        <main className={`kanban ${isFullscreen ? 'kanban--fullscreen' : ''}`}>
+            {/* Station filter bar */}
+            {allCategories.length > 1 && (
+                <div className="kanban__station-bar">
+                    <button
+                        className={`kanban__station-btn ${!stationFilter ? 'kanban__station-btn--active' : ''}`}
+                        onClick={() => setStationFilter(null)}
+                    >
+                        Todas
+                    </button>
+                    {allCategories.map(cat => (
+                        <button
+                            key={cat}
+                            className={`kanban__station-btn ${stationFilter === cat ? 'kanban__station-btn--active' : ''}`}
+                            onClick={() => setStationFilter(stationFilter === cat ? null : cat)}
+                        >
+                            {cat}
+                        </button>
+                    ))}
+                    <div className="kanban__station-spacer" />
+                    <button
+                        className="kanban__station-btn kanban__station-btn--fs"
+                        onClick={toggleFullscreen}
+                        title={isFullscreen ? 'Salir de pantalla completa (F11)' : 'Pantalla completa (F11)'}
+                    >
+                        {isFullscreen ? '⊡' : '⊞'} F11
+                    </button>
+                </div>
+            )}
+
+            {/* No station filter bar but still show fullscreen button */}
+            {allCategories.length <= 1 && (
+                <div className="kanban__station-bar kanban__station-bar--minimal">
+                    <div className="kanban__station-spacer" />
+                    <button
+                        className="kanban__station-btn kanban__station-btn--fs"
+                        onClick={toggleFullscreen}
+                        title={isFullscreen ? 'Salir de pantalla completa (F11)' : 'Pantalla completa (F11)'}
+                    >
+                        {isFullscreen ? '⊡' : '⊞'} F11
+                    </button>
+                </div>
+            )}
+
             <div className="kanban__columns">
                 {COLUMNS.map(col => {
                     const colOrders = columnOrders(col.statuses);
@@ -189,10 +295,13 @@ export const KitchenKanban: React.FC<KitchenKanbanProps> = ({
                                         onRemove={onRemove}
                                         onPrint={onPrint}
                                         locationLabel={getLocationLabel(order)}
+                                        highlightCategories={highlightCategories}
                                     />
                                 ))}
                                 {colOrders.length === 0 && (
-                                    <div className="kanban__column-empty">Sin pedidos</div>
+                                    <div className="kanban__column-empty">
+                                        {stationFilter ? `Sin pedidos de ${stationFilter}` : 'Sin pedidos'}
+                                    </div>
                                 )}
                             </div>
                         </div>
@@ -201,13 +310,13 @@ export const KitchenKanban: React.FC<KitchenKanbanProps> = ({
             </div>
 
             {/* Completed orders bar at bottom */}
-            {orders.some(o => o.status === 'DELIVERED' || o.status === 'CANCELLED') && (
+            {filteredOrders.some(o => o.status === 'DELIVERED' || o.status === 'CANCELLED') && (
                 <div className="kanban__completed-bar">
                     <span className="kanban__completed-label">
-                        Completados: {orders.filter(o => o.status === 'DELIVERED' || o.status === 'CANCELLED').length}
+                        Completados: {filteredOrders.filter(o => o.status === 'DELIVERED' || o.status === 'CANCELLED').length}
                     </span>
                     <div className="kanban__completed-list">
-                        {orders.filter(o => o.status === 'DELIVERED' || o.status === 'CANCELLED').map(order => (
+                        {filteredOrders.filter(o => o.status === 'DELIVERED' || o.status === 'CANCELLED').map(order => (
                             <div key={order.id} className="kanban__completed-chip">
                                 #{order.code}
                                 <button className="kanban__completed-remove" onClick={() => onRemove(order.id)}>×</button>

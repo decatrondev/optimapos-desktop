@@ -1,12 +1,13 @@
 import React from 'react';
 import { Role } from '../types/order';
 
-export type ActiveView = 'dashboard' | 'kitchen' | 'orders' | 'delivery' | 'cash';
+export type ActiveView = 'dashboard' | 'kitchen' | 'pos' | 'orders' | 'delivery' | 'cash';
 
 /** Permission module required for each view */
 export const VIEW_PERMISSIONS: Record<ActiveView, string> = {
     dashboard: 'reports',
     kitchen: 'kitchen_view',
+    pos: 'pos',
     orders: 'orders',
     delivery: 'delivery_view',
     cash: 'cash_management',
@@ -21,6 +22,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
     { key: 'dashboard', label: 'Dashboard', icon: '📊', roles: ['ADMIN', 'MANAGER'] },
+    { key: 'pos', label: 'POS', icon: '🛒', roles: ['ADMIN', 'MANAGER', 'VENDOR'] },
     { key: 'kitchen', label: 'Cocina', icon: '🔥', roles: ['ADMIN', 'MANAGER', 'KITCHEN'] },
     { key: 'orders', label: 'Pedidos', icon: '📋', roles: ['ADMIN', 'MANAGER', 'VENDOR'] },
     { key: 'delivery', label: 'Delivery', icon: '🛵', roles: ['ADMIN', 'MANAGER', 'DELIVERY'] },
@@ -37,11 +39,8 @@ interface ViewNavBarProps {
 
 export const ViewNavBar: React.FC<ViewNavBarProps> = ({ currentView, onNavigate, userRole, badges, hasPermission }) => {
     const visibleItems = NAV_ITEMS.filter(item => {
-        // Must be in allowed roles for this view
         if (!item.roles.includes(userRole)) return false;
-        // ADMIN/MANAGER bypass permission checks
         if (userRole === 'ADMIN' || userRole === 'MANAGER') return true;
-        // Check granular permission if hasPermission is provided
         if (hasPermission) {
             const mod = VIEW_PERMISSIONS[item.key];
             return hasPermission(mod, 'read');
@@ -49,7 +48,6 @@ export const ViewNavBar: React.FC<ViewNavBarProps> = ({ currentView, onNavigate,
         return true;
     });
 
-    // Don't render if only 1 item (single-role users like KITCHEN see only kitchen)
     if (visibleItems.length <= 1) return null;
 
     return (
@@ -82,8 +80,8 @@ export function getDefaultView(role: Role): ActiveView {
         case 'DELIVERY':
             return 'delivery';
         case 'VENDOR':
-            return 'orders';
+            return 'pos';
         default:
-            return 'orders';
+            return 'pos';
     }
 }

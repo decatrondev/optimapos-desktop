@@ -67,11 +67,15 @@ export interface OrderItem {
         id: number;
         name: string;
         description: string | null;
+        categoryId?: number;
+        category?: { name: string };
     } | null;
 
     combo?: {
         id: number;
         name: string;
+        categoryId?: number;
+        category?: { name: string };
     } | null;
 
     variant?: {
@@ -174,3 +178,90 @@ declare global {
         electronAPI?: ElectronAPI;
     }
 }
+
+// ─── POS Types ──────────────────────────────────────────────────────────────
+
+export interface POSProduct {
+    id: number;
+    name: string;
+    price: number;
+    image: string | null;
+    categoryId: number;
+    isActive: boolean;
+    sortOrder: number;
+    stockEnabled: boolean;
+    stockCurrent: number;
+    promoPrice?: number | null;
+    promoValidFrom?: string | null;
+    promoValidUntil?: string | null;
+    variants: POSVariant[];
+    addonGroups: { addonGroup: POSAddonGroup }[];
+}
+
+export interface POSVariant {
+    id: number;
+    name: string;
+    price: number;
+    isActive: boolean;
+}
+
+export interface POSAddonGroup {
+    id: number;
+    name: string;
+    type: 'ADDITION' | 'SUGGESTED';
+    addons: POSAddon[];
+}
+
+export interface POSAddon {
+    id: number;
+    name: string;
+    price: number;
+}
+
+export interface POSCategory {
+    id: number;
+    name: string;
+    image: string | null;
+    sortOrder: number;
+    _count?: { products: number };
+}
+
+export interface POSCombo {
+    id: number;
+    name: string;
+    price: number;
+    image: string | null;
+    description: string | null;
+    items?: { product: { id: number; name: string }; quantity: number }[];
+}
+
+export interface POSTable {
+    id: number;
+    name: string;
+    number: number;
+    capacity: number;
+    zone: string | null;
+    status: 'FREE' | 'OCCUPIED' | 'RESERVED';
+}
+
+export interface POSZone {
+    id: number;
+    name: string;
+    surcharge: number;
+}
+
+export interface CartItem {
+    cartId: string;
+    productId?: number;
+    comboId?: number;
+    variantId?: number;
+    name: string;
+    variantName: string | null;
+    basePrice: number;
+    quantity: number;
+    addons: { addonId: number; name: string; price: number; quantity: number }[];
+    notes: string;
+    maxStock?: number;
+}
+
+export type PaymentMethod = 'CASH' | 'CARD' | 'YAPE' | 'IZIPAY' | 'TRANSFER';

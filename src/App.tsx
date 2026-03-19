@@ -7,6 +7,7 @@ import { KitchenKanban } from './components/KitchenKanban';
 import { ManagerDashboard } from './components/ManagerDashboard';
 import { DeliveryView } from './components/DeliveryView';
 import { CashManagement } from './components/CashManagement';
+import { POSView } from './components/POSView';
 import { ViewNavBar, ActiveView, getDefaultView, VIEW_PERMISSIONS } from './components/ViewNavBar';
 import { UpdateBanner } from './components/UpdateBanner';
 import { AlertOverlay } from './components/AlertOverlay';
@@ -266,6 +267,17 @@ const OperationalView: React.FC<{
                         activeOrders={mergedOrders}
                         onNavigate={setActiveView}
                         currentView={activeView}
+                    />
+                );
+            case 'pos':
+                if (!canView('pos')) return noPermissionScreen('el punto de venta');
+                return (
+                    <POSView
+                        token={token!}
+                        serverUrl={serverUrl}
+                        locationId={socketLocId}
+                        storeName={storeName}
+                        onPrintOrder={handlePrintTicket}
                     />
                 );
             case 'kitchen':
