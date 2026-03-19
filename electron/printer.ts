@@ -73,15 +73,40 @@ export function printViaTCP(
     });
 }
 
+// ─── USB: Resolve printer name from port name ──────────────────────────────
+
+/**
+ * On Windows, the address might be a port name (e.g. "USB003") instead of
+ * the driver name (e.g. "80mm Series Printer"). This resolves it.
+ */
+async function resolveWindowsPrinterName(nameOrPort: string): Promise<string> {
+    if (process.platform !== 'win32') return nameOrPort;
+
+    // If it looks like a port name (USBnnn, LPTn, COMn), resolve to driver name
+    if (/^(USB|LPT|COM)\d+$/i.test(nameOrPort)) {
+        const printers = await getSystemPrinters();
+        const match = printers.find(p => p.portName?.toUpperCase() === nameOrPort.toUpperCase());
+        if (match) {
+            log.info(`[Printer USB] Resolved port "${nameOrPort}" → printer "${match.name}"`);
+            return match.name;
+        }
+        log.warn(`[Printer USB] Could not resolve port "${nameOrPort}" to a printer name`);
+    }
+    return nameOrPort;
+}
+
 // ─── USB Printer (via system driver name) ───────────────────────────────────
 
 export function printViaUSB(
     printerName: string,
     data: Buffer
 ): Promise<{ success: boolean; error?: string }> {
-    return new Promise((resolve) => {
+    return new Promise(async (resolve) => {
         const platform = process.platform;
         const tmpFile = require('path').join(os.tmpdir(), `optimapos-ticket-${Date.now()}.bin`);
+
+        // Resolve port names (USB003) to driver names (80mm Series Printer)
+        const resolvedName = await resolveWindowsPrinterName(printerName);
 
         // Write binary data to temp file
         try {
@@ -95,18 +120,18 @@ export function printViaUSB(
         if (platform === 'win32') {
             // Windows: Use Spooler API via PowerShell to send RAW binary data
             // The standard `print /d:` command treats data as text — doesn't work for ESC/POS
-            const escapedPrinter = printerName.replace(/'/g, "''");
+            const escapedPrinter = resolvedName.replace(/'/g, "''");
             const escapedFile = tmpFile.replace(/'/g, "''");
             cmd = `powershell -NoProfile -Command "Add-Type -TypeDefinition @\\"\nusing System;using System.Runtime.InteropServices;\npublic class RawPrint{\n[StructLayout(LayoutKind.Sequential)]public struct DOCINFOA{[MarshalAs(UnmanagedType.LPStr)]public string N;[MarshalAs(UnmanagedType.LPStr)]public string O;[MarshalAs(UnmanagedType.LPStr)]public string D;}\n[DllImport(\\\"winspool.drv\\\",SetLastError=true,CharSet=CharSet.Ansi)]public static extern bool OpenPrinter(string p,out IntPtr h,IntPtr d);\n[DllImport(\\\"winspool.drv\\\",SetLastError=true,CharSet=CharSet.Ansi)]public static extern bool StartDocPrinter(IntPtr h,int l,ref DOCINFOA di);\n[DllImport(\\\"winspool.drv\\\",SetLastError=true)]public static extern bool StartPagePrinter(IntPtr h);\n[DllImport(\\\"winspool.drv\\\",SetLastError=true)]public static extern bool WritePrinter(IntPtr h,IntPtr b,int c,out int w);\n[DllImport(\\\"winspool.drv\\\",SetLastError=true)]public static extern bool EndPagePrinter(IntPtr h);\n[DllImport(\\\"winspool.drv\\\",SetLastError=true)]public static extern bool EndDocPrinter(IntPtr h);\n[DllImport(\\\"winspool.drv\\\",SetLastError=true)]public static extern bool ClosePrinter(IntPtr h);\npublic static bool Send(string name,byte[] data){IntPtr h;DOCINFOA di=new DOCINFOA();di.N=\\\"OptimaPOS\\\";di.D=\\\"RAW\\\";\nif(!OpenPrinter(name,out h,IntPtr.Zero))return false;\nif(!StartDocPrinter(h,1,ref di)){ClosePrinter(h);return false;}\nif(!StartPagePrinter(h)){EndDocPrinter(h);ClosePrinter(h);return false;}\nIntPtr p=Marshal.AllocCoTaskMem(data.Length);Marshal.Copy(data,0,p,data.Length);int w;\nbool ok=WritePrinter(h,p,data.Length,out w);Marshal.FreeCoTaskMem(p);\nEndPagePrinter(h);EndDocPrinter(h);ClosePrinter(h);return ok;}}\n\\"@;$r=[RawPrint]::Send('${escapedPrinter}',[System.IO.File]::ReadAllBytes('${escapedFile}'));if(!$r){exit 1}"`;
         } else if (platform === 'darwin') {
             // macOS: use lp with raw option
-            cmd = `lp -d "${printerName}" -o raw "${tmpFile}"`;
+            cmd = `lp -d "${resolvedName}" -o raw "${tmpFile}"`;
         } else {
             // Linux: use lp with raw option
-            cmd = `lp -d "${printerName}" -o raw "${tmpFile}"`;
+            cmd = `lp -d "${resolvedName}" -o raw "${tmpFile}"`;
         }
 
-        log.info(`[Printer USB] Sending raw data to "${printerName}" (${data.length} bytes)`);
+        log.info(`[Printer USB] Sending raw data to "${resolvedName}" (${data.length} bytes)`);
 
         exec(cmd, { timeout: 15000 }, (error, _stdout, stderr) => {
             // Clean up temp file

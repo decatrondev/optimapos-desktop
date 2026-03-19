@@ -64,9 +64,13 @@ export const PrinterSetup: React.FC<PrinterSetupProps> = ({ token, storeName, lo
         if (printer.type === 'NETWORK') {
             result = await api.printerTestConnection(printer.address, printer.port || 9100);
         } else {
-            // For USB, we test by listing system printers and checking if this one exists
+            // For USB, check by name OR port name (address could be either)
             const sysPrinters = await api.printerListSystem();
-            const found = sysPrinters.some(sp => sp.name === printer.address);
+            const found = sysPrinters.some(sp =>
+                sp.name === printer.address ||
+                sp.portName === printer.address ||
+                sp.name.toLowerCase() === printer.address.toLowerCase()
+            );
             result = found ? { success: true } : { success: false, error: `Impresora "${printer.address}" no encontrada en el sistema` };
         }
 
