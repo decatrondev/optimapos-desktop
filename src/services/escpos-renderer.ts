@@ -122,10 +122,8 @@ function renderOrderInfo(el: TemplateElement, order: Order, lineWidth: number): 
 
     const customerName = order.user?.name || order.guestName || 'Cliente';
 
-    if (el.showTable) {
-        lines.push('[SIZE:2x2]');
-        lines.push(alignText('MESA: --', 'center', lineWidth));
-        lines.push('[SIZE:1x1]');
+    if (el.showTable && (order as any).tableNumber) {
+        lines.push(rowText('Mesa:', (order as any).tableNumber || '', lineWidth));
     }
 
     lines.push(rowText('Pedido:', `#${order.code}`, lineWidth));
@@ -138,7 +136,8 @@ function renderOrderInfo(el: TemplateElement, order: Order, lineWidth: number): 
     if (order.guestAddress) {
         lines.push(rowText('Dir:', order.guestAddress, lineWidth));
     }
-    lines.push(rowText('Tipo:', order.type === 'DELIVERY' ? '🛵 Delivery' : '🏪 Recojo', lineWidth));
+    const tipo = order.type === 'DELIVERY' ? 'Delivery' : order.type === 'DINE_IN' ? 'Mesa' : 'Recojo';
+    lines.push(rowText('Tipo:', tipo, lineWidth));
 
     if (order.notes) {
         lines.push(`Nota: ${order.notes}`);
@@ -159,18 +158,6 @@ function renderItemsList(
 
     const showPrices = el.showPrices !== false;
     const showAddons = el.showAddons !== false;
-
-    if (el.font === 'B') lines.push('[FONT:B]');
-
-    // Column headers
-    lines.push('[STYLE:b]');
-    if (showPrices) {
-        lines.push(rowText('CANT. PRODUCTO', 'P.UNIT', lineWidth));
-    } else {
-        lines.push('CANT. PRODUCTO');
-    }
-    lines.push(sep('─', lineWidth));
-    lines.push('[STYLE:normal]');
 
     for (const item of order.items) {
         const name = getItemName(item);
@@ -228,8 +215,6 @@ function renderTotals(
         lines.push(rowText('Descuento:', `-${formatPrice(order.discount, currencySymbol)}`, lineWidth));
     }
 
-    lines.push(sep('─', lineWidth));
-    lines.push('[SIZE:2x1 STYLE:b]');
     lines.push(rowText('TOTAL:', formatPrice(order.total, currencySymbol), lineWidth));
     lines.push(RESET);
 

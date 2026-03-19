@@ -491,34 +491,31 @@ async function renderImage(
 
 function renderOrderInfo(el: TemplateElement, order: any, lw: number): number[] {
     if (!order) return [];
+    const ew = effectiveWidth(lw, el.scaleW || 1);
     const bytes: number[] = [...applyStyle(el)];
 
     const customerName = order.user?.name || order.clientName || order.guestName || 'Cliente';
 
-    // Mesa in double size if showTable
     if ((el as any).showTable !== false && (order.tableNumber || order.table?.name)) {
-        const mesaText = 'MESA: ' + (order.tableNumber || order.table?.name || '');
-        bytes.push(...cmd.alignCenter, ...cmd.size(2, 2), ...cmd.boldOn);
-        bytes.push(...line(mesaText));
-        bytes.push(...cmd.normalSize, ...cmd.boldOff, LF);
-        bytes.push(...applyStyle(el));
+        bytes.push(...line(rowText('Mesa:', (order.tableNumber || order.table?.name || ''), ew)));
     }
 
-    bytes.push(...line(rowText('Pedido:', '#' + (order.code || ''), lw)));
-    bytes.push(...line(rowText('Fecha:', (order.createdAt ? formatDate(order.createdAt) + ' ' + formatTime(order.createdAt) : ''), lw)));
-    bytes.push(...line(rowText('Cliente:', customerName, lw)));
+    bytes.push(...line(rowText('Pedido:', '#' + (order.code || ''), ew)));
+    bytes.push(...line(rowText('Fecha:', (order.createdAt ? formatDate(order.createdAt) + ' ' + formatTime(order.createdAt) : ''), ew)));
+    bytes.push(...line(rowText('Cliente:', customerName, ew)));
 
     if (order.user?.phone || order.clientPhone || order.guestPhone) {
-        bytes.push(...line(rowText('Tel:', (order.user?.phone || order.clientPhone || order.guestPhone), lw)));
+        bytes.push(...line(rowText('Tel:', (order.user?.phone || order.clientPhone || order.guestPhone), ew)));
     }
     if (order.clientAddress || order.guestAddress) {
-        bytes.push(...line(rowText('Dir:', (order.clientAddress || order.guestAddress), lw)));
+        bytes.push(...line(rowText('Dir:', (order.clientAddress || order.guestAddress), ew)));
     }
     const tipo = order.type === 'DELIVERY' ? 'Delivery' : order.type === 'DINE_IN' ? 'Mesa' : 'Recojo';
-    bytes.push(...line(rowText('Tipo:', tipo, lw)));
+    bytes.push(...line(rowText('Tipo:', tipo, ew)));
 
     if (order.notes) {
-        bytes.push(...line('Nota: ' + order.notes));
+        const wrapped = wrapText('Nota: ' + order.notes, ew);
+        for (const wl of wrapped) bytes.push(...line(wl));
     }
 
     bytes.push(...resetStyle());
@@ -532,19 +529,10 @@ function renderItemsList(
     lw: number
 ): number[] {
     if (!order?.items) return [];
+    const ew = effectiveWidth(lw, el.scaleW || 1);
     const bytes: number[] = [...applyStyle(el)];
     const showPrices = (el as any).showPrices !== false;
     const showAddons = (el as any).showAddons !== false;
-
-    // Header row
-    bytes.push(...cmd.boldOn);
-    if (showPrices) {
-        bytes.push(...line(rowText('CANT. PRODUCTO', 'PRECIO', lw)));
-    } else {
-        bytes.push(...line('CANT. PRODUCTO'));
-    }
-    bytes.push(...line('-'.repeat(lw)));
-    bytes.push(...cmd.boldOff);
 
     for (const item of order.items) {
         const name = getItemName(item);
@@ -552,12 +540,12 @@ function renderItemsList(
 
         if (showPrices) {
             const price = currencySymbol + formatMoney(item.totalPrice || item.unitPrice);
-            // Truncate name if needed to fit price
-            const maxNameLen = lw - price.length - 1;
+            const maxNameLen = ew - price.length - 1;
             const truncated = qtyStr.length > maxNameLen ? qtyStr.substring(0, maxNameLen) : qtyStr;
-            bytes.push(...line(rowText(truncated, price, lw)));
+            bytes.push(...line(rowText(truncated, price, ew)));
         } else {
-            bytes.push(...line(qtyStr));
+            const wrapped = wrapText(qtyStr, ew);
+            for (const wl of wrapped) bytes.push(...line(wl));
         }
 
         if (showAddons && item.addons?.length > 0) {
@@ -573,7 +561,8 @@ function renderItemsList(
         }
 
         if (item.notes) {
-            bytes.push(...line('  >> ' + item.notes));
+            const wrapped = wrapText('  >> ' + item.notes, ew);
+            for (const wl of wrapped) bytes.push(...line(wl));
         }
     }
 
@@ -588,32 +577,27 @@ function renderTotals(
     lw: number
 ): number[] {
     if (!order) return [];
+    const ew = effectiveWidth(lw, el.scaleW || 1);
     const bytes: number[] = [...applyStyle(el)];
     const showSubtotal = (el as any).showSubtotal !== false;
     const showDeliveryFee = (el as any).showDeliveryFee !== false;
     const showDiscount = (el as any).showDiscount !== false;
 
-    bytes.push(...line('-'.repeat(lw)));
-
     if (showSubtotal) {
-        bytes.push(...line(rowText('Subtotal:', currencySymbol + formatMoney(order.subtotal), lw)));
+        bytes.push(...line(rowText('Subtotal:', currencySymbol + formatMoney(order.subtotal), ew)));
     }
 
     const deliveryFee = parseFloat(String(order.deliveryFee || 0));
     if (showDeliveryFee && deliveryFee > 0) {
-        bytes.push(...line(rowText('Delivery:', currencySymbol + formatMoney(order.deliveryFee), lw)));
+        bytes.push(...line(rowText('Delivery:', currencySymbol + formatMoney(order.deliveryFee), ew)));
     }
 
     const discount = parseFloat(String(order.discount || 0));
     if (showDiscount && discount > 0) {
-        bytes.push(...line(rowText('Descuento:', '-' + currencySymbol + formatMoney(order.discount), lw)));
+        bytes.push(...line(rowText('Descuento:', '-' + currencySymbol + formatMoney(order.discount), ew)));
     }
 
-    bytes.push(...line('-'.repeat(lw)));
-    bytes.push(...cmd.boldOn, ...cmd.size(2, 1));
-    const totalLw = effectiveWidth(lw, 2);
-    bytes.push(...line(rowText('TOTAL:', currencySymbol + formatMoney(order.total), totalLw)));
-    bytes.push(...cmd.normalSize, ...cmd.boldOff);
+    bytes.push(...line(rowText('TOTAL:', currencySymbol + formatMoney(order.total), ew)));
 
     bytes.push(...resetStyle());
     return bytes;
