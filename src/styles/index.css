@@ -270,6 +270,34 @@ body::before {
   box-shadow: 0 0 8px var(--accent-danger);
 }
 
+.status-bar__connection.reconnecting {
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  color: #fbbf24;
+}
+
+.reconnecting .status-bar__connection-dot {
+  background: #fbbf24;
+  box-shadow: 0 0 8px #fbbf24;
+  animation: pulse-dot 1s ease-in-out infinite;
+}
+
+.status-bar__pending {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: var(--radius-xl);
+  background: rgba(251, 191, 36, 0.15);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #fbbf24;
+}
+
+.status-bar__pending-icon { font-size: 0.85rem; }
+.status-bar__pending-count { min-width: 16px; text-align: center; }
+
 /* ═══════════════════════════════════════════════════════════════════════════
    ORDER QUEUE
    ═══════════════════════════════════════════════════════════════════════════ */

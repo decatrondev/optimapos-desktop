@@ -13,6 +13,28 @@ import {
     textToEscPos,
     testTCPConnection,
 } from './printer';
+import {
+    initDatabase,
+    closeDatabase,
+    hasCachedCatalog,
+    getCachedProducts,
+    getCachedCategories,
+    getCachedCombos,
+    getCachedTables,
+    getCachedZones,
+    getLastSyncTime,
+    saveOfflineOrder,
+    getPendingOrders,
+    getPendingOrderCount,
+    removePendingOrder,
+} from './database';
+import {
+    syncCatalog,
+    syncPendingOrders,
+    checkConnection,
+    startSyncScheduler,
+    stopSyncScheduler,
+} from './offline-sync';
 
 import { exec } from 'child_process';
 
@@ -415,6 +437,64 @@ ipcMain.handle('printer-list-system', async () => {
     return getSystemPrinters();
 });
 
+// ─── Offline / SQLite IPC ────────────────────────────────────────────────────
+
+ipcMain.handle('offline-check-connection', async (_event, serverUrl: string) => {
+    return checkConnection(serverUrl);
+});
+
+ipcMain.handle('offline-sync-catalog', async (_event, serverUrl: string, token: string, locationId: number) => {
+    return syncCatalog({ serverUrl, token, locationId });
+});
+
+ipcMain.handle('offline-sync-pending', async (_event, serverUrl: string, token: string, locationId: number) => {
+    return syncPendingOrders({ serverUrl, token, locationId });
+});
+
+ipcMain.handle('offline-has-catalog', async () => {
+    return hasCachedCatalog();
+});
+
+ipcMain.handle('offline-get-products', async () => {
+    return getCachedProducts();
+});
+
+ipcMain.handle('offline-get-categories', async () => {
+    return getCachedCategories();
+});
+
+ipcMain.handle('offline-get-combos', async () => {
+    return getCachedCombos();
+});
+
+ipcMain.handle('offline-get-tables', async () => {
+    return getCachedTables();
+});
+
+ipcMain.handle('offline-get-zones', async () => {
+    return getCachedZones();
+});
+
+ipcMain.handle('offline-get-last-sync', async () => {
+    return getLastSyncTime();
+});
+
+ipcMain.handle('offline-save-order', async (_event, id: string, payload: any) => {
+    return saveOfflineOrder(id, payload);
+});
+
+ipcMain.handle('offline-get-pending-orders', async () => {
+    return getPendingOrders();
+});
+
+ipcMain.handle('offline-get-pending-count', async () => {
+    return getPendingOrderCount();
+});
+
+ipcMain.handle('offline-remove-pending', async (_event, id: string) => {
+    removePendingOrder(id);
+});
+
 // ─── Updater IPC ─────────────────────────────────────────────────────────────
 
 ipcMain.handle('updater-download', async () => {
@@ -450,6 +530,9 @@ ipcMain.handle('get-app-version', async () => {
 // ─── App Lifecycle ───────────────────────────────────────────────────────────
 
 app.whenReady().then(async () => {
+    // Initialize offline database
+    initDatabase();
+
     // Ensure Windows firewall allows TCP 9100 for network printers
     ensureFirewallRule();
 
@@ -459,6 +542,18 @@ app.whenReady().then(async () => {
     // If we're still running (user skipped or no update), show the app
     createWindow();
     setupBackgroundUpdater();
+
+    // Start sync scheduler — provides connection status to renderer
+    startSyncScheduler(
+        () => {
+            const config = readConfig();
+            if (!config.token || !config.serverUrl || !config.locationId) return null;
+            return { serverUrl: config.serverUrl, token: config.token, locationId: config.locationId };
+        },
+        (status) => {
+            sendToRenderer('offline-status', { status });
+        },
+    );
 
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {
@@ -471,4 +566,9 @@ app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {
         app.quit();
     }
+});
+
+app.on('will-quit', () => {
+    stopSyncScheduler();
+    closeDatabase();
 });

@@ -20,9 +20,11 @@
     "dist:mac": "npm run build && electron-builder --mac",
     "dist:linux": "npm run build && electron-builder --linux",
     "dist:all": "npm run build && electron-builder --win --mac --linux",
-    "publish": "npm run build && electron-builder --win --mac --linux --publish always"
+    "publish": "npm run build && electron-builder --win --mac --linux --publish always",
+    "postinstall": "electron-rebuild -f -w better-sqlite3"
   },
   "dependencies": {
+    "better-sqlite3": "^12.8.0",
     "dotenv": "^16.4.7",
     "electron-log": "^5.4.3",
     "electron-updater": "^6.8.3",
@@ -31,6 +33,7 @@
     "socket.io-client": "^4.7.5"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
@@ -38,6 +41,7 @@
     "cross-env": "^7.0.3",
     "electron": "^33.2.1",
     "electron-builder": "^25.1.8",
+    "electron-rebuild": "^3.2.9",
     "typescript": "^5.6.3",
     "vite": "^6.0.5"
   },
@@ -53,6 +57,9 @@
       "dist/**/*",
       "dist-electron/**/*"
     ],
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**"
+    ],
     "publish": {
       "provider": "github",
       "owner": "decagraff",
@@ -63,11 +70,15 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "portable",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "build/icon.png"
@@ -86,7 +97,10 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ],
       "icon": "build/icon.png",
@@ -96,16 +110,22 @@
       "target": [
         {
           "target": "AppImage",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "deb",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "build/icon.png",
       "category": "Office",
-      "executableArgs": ["--no-sandbox"],
+      "executableArgs": [
+        "--no-sandbox"
+      ],
       "desktop": {
         "Name": "OptimaPOS Terminal",
         "Comment": "App de escritorio para restaurantes"
@@ -116,8 +136,16 @@
     },
     "dmg": {
       "contents": [
-        { "x": 130, "y": 220 },
-        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
       ]
     }
   }

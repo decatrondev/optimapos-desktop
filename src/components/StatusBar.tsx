@@ -1,6 +1,7 @@
 import React from 'react';
 import { useClock } from '../hooks/useClock';
 import { AuthUser } from '../types/order';
+import { ConnectionStatus } from '../hooks/useOffline';
 
 interface StatusBarProps {
     storeName: string;
@@ -13,6 +14,9 @@ interface StatusBarProps {
     onChangeServer?: () => void;
     onChangeLocation?: () => void;
     canChangeLocation?: boolean;
+    offlineStatus?: ConnectionStatus;
+    pendingOrders?: number;
+    lastSync?: string | null;
 }
 
 function getRoleBadge(role: string): { label: string; className: string } {
@@ -28,6 +32,7 @@ function getRoleBadge(role: string): { label: string; className: string } {
 
 export const StatusBar: React.FC<StatusBarProps> = ({
     storeName, locationName, isConnected, orderCount, user, onLogout, onSettings, onChangeServer, onChangeLocation, canChangeLocation,
+    offlineStatus, pendingOrders, lastSync,
 }) => {
     const time = useClock();
     const roleBadge = user ? getRoleBadge(user.role) : null;
@@ -88,10 +93,22 @@ export const StatusBar: React.FC<StatusBarProps> = ({
                     <span className="status-bar__orders-label">pedidos</span>
                 </div>
 
-                <div className={`status-bar__connection ${isConnected ? 'connected' : 'disconnected'}`}>
+                {pendingOrders != null && pendingOrders > 0 && (
+                    <div className="status-bar__pending" title={`${pendingOrders} pedido(s) pendientes de sincronizar`}>
+                        <span className="status-bar__pending-icon">📴</span>
+                        <span className="status-bar__pending-count">{pendingOrders}</span>
+                    </div>
+                )}
+
+                <div className={`status-bar__connection ${offlineStatus === 'connected' || (!offlineStatus && isConnected) ? 'connected' : offlineStatus === 'reconnecting' ? 'reconnecting' : 'disconnected'}`}
+                     title={lastSync ? `Ultimo sync: ${new Date(lastSync).toLocaleTimeString()}` : undefined}>
                     <span className="status-bar__connection-dot" />
                     <span className="status-bar__connection-text">
-                        {isConnected ? 'Conectado' : 'Sin conexión'}
+                        {offlineStatus === 'connected' || (!offlineStatus && isConnected)
+                            ? 'Conectado'
+                            : offlineStatus === 'reconnecting'
+                                ? 'Reconectando...'
+                                : 'Sin conexion'}
                     </span>
                 </div>
             </div>

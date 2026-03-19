@@ -165,6 +165,23 @@ export interface ElectronAPI {
     printerListSystem: () => Promise<Array<{ name: string; isDefault: boolean; portName?: string }>>;
     onPrinterScanProgress: (callback: (data: { current: number; total: number }) => void) => () => void;
 
+    // Offline / SQLite
+    offlineCheckConnection: (serverUrl: string) => Promise<boolean>;
+    offlineSyncCatalog: (serverUrl: string, token: string, locationId: number) => Promise<{ success: boolean; error?: string }>;
+    offlineSyncPending: (serverUrl: string, token: string, locationId: number) => Promise<{ synced: number; failed: number }>;
+    offlineHasCatalog: () => Promise<boolean>;
+    offlineGetProducts: () => Promise<any[]>;
+    offlineGetCategories: () => Promise<any[]>;
+    offlineGetCombos: () => Promise<any[]>;
+    offlineGetTables: () => Promise<any[]>;
+    offlineGetZones: () => Promise<{ zones: any[]; basePrice: number }>;
+    offlineGetLastSync: () => Promise<string | null>;
+    offlineSaveOrder: (id: string, payload: any) => Promise<{ success: boolean; error?: string }>;
+    offlineGetPendingOrders: () => Promise<any[]>;
+    offlineGetPendingCount: () => Promise<number>;
+    offlineRemovePending: (id: string) => Promise<void>;
+    onOfflineStatus: (callback: (data: { status: 'connected' | 'reconnecting' | 'offline' }) => void) => () => void;
+
     // Auto-Updater
     getAppVersion: () => Promise<string>;
     updaterCheck: () => Promise<{ success: boolean; version?: string; error?: string }>;

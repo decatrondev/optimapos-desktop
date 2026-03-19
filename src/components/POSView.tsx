@@ -59,9 +59,11 @@ interface POSViewProps {
     locationId?: number;
     storeName: string;
     onPrintOrder?: (order: any) => void;
+    isOffline?: boolean;
+    saveOfflineOrder?: (id: string, payload: any) => Promise<{ success: boolean; error?: string }>;
 }
 
-export const POSView: React.FC<POSViewProps> = ({ token, serverUrl, locationId, storeName, onPrintOrder }) => {
+export const POSView: React.FC<POSViewProps> = ({ token, serverUrl, locationId, storeName, onPrintOrder, isOffline, saveOfflineOrder: saveOffline }) => {
     // ─── Catalog State ──────────────────────────────────────────────────────
     const [products, setProducts] = useState<POSProduct[]>([]);
     const [categories, setCategories] = useState<POSCategory[]>([]);
@@ -104,11 +106,12 @@ export const POSView: React.FC<POSViewProps> = ({ token, serverUrl, locationId, 
     // ─── Table Picker ───────────────────────────────────────────────────────
     const [showTablePicker, setShowTablePicker] = useState(false);
 
-    // ─── Load catalog ───────────────────────────────────────────────────────
+    // ─── Load catalog (online → offline fallback) ─────────────────────────
     useEffect(() => {
         const locId = locationId && locationId > 0 ? locationId : undefined;
         setLoading(true);
-        Promise.all([
+
+        const loadOnline = () => Promise.all([
             fetchProducts(token, locId),
             fetchCategories(token, locId),
             fetchCombos(token, locId),
@@ -121,10 +124,40 @@ export const POSView: React.FC<POSViewProps> = ({ token, serverUrl, locationId, 
             setTables(tbls);
             setZones(zoneData.zones);
             setDeliveryBasePrice(zoneData.basePrice);
-        }).catch(err => {
-            console.error('[POS] Catalog load failed:', err);
-        }).finally(() => setLoading(false));
-    }, [token, locationId]);
+        });
+
+        const loadOffline = async () => {
+            const api = window.electronAPI;
+            if (!api?.offlineGetProducts) return false;
+            const hasCatalog = await api.offlineHasCatalog();
+            if (!hasCatalog) return false;
+            const [prods, cats, cmbs, tbls, zoneData] = await Promise.all([
+                api.offlineGetProducts(),
+                api.offlineGetCategories(),
+                api.offlineGetCombos(),
+                api.offlineGetTables(),
+                api.offlineGetZones(),
+            ]);
+            setProducts(prods);
+            setCategories(cats);
+            setCombos(cmbs);
+            setTables(tbls);
+            setZones(zoneData.zones);
+            setDeliveryBasePrice(zoneData.basePrice);
+            return true;
+        };
+
+        if (isOffline) {
+            loadOffline().then(ok => {
+                if (!ok) console.warn('[POS] No cached catalog available');
+            }).finally(() => setLoading(false));
+        } else {
+            loadOnline().catch(async (err) => {
+                console.error('[POS] Online load failed, trying cache:', err);
+                await loadOffline();
+            }).finally(() => setLoading(false));
+        }
+    }, [token, locationId, isOffline]);
 
     // ─── Keyboard shortcuts ─────────────────────────────────────────────────
     useEffect(() => {
@@ -392,7 +425,42 @@ export const POSView: React.FC<POSViewProps> = ({ token, serverUrl, locationId, 
             setTimeout(() => setSuccessOrder(null), 4000);
         } catch (err: any) {
             console.error('[POS] Order failed:', err);
-            alert(`Error: ${err.message}`);
+            // If offline and we have saveOffline, save locally
+            if (isOffline && saveOffline) {
+                const offlineId = `offline-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+                const locId2 = locationId && locationId > 0 ? locationId : undefined;
+                const payload: CreatePOSOrderPayload = {
+                    type: orderType,
+                    locationId: locId2,
+                    tableId: orderType === 'DINE_IN' ? selectedTable?.id : undefined,
+                    guestName: guestName || undefined,
+                    guestPhone: guestPhone || undefined,
+                    guestAddress: orderType === 'DELIVERY' ? guestAddress || undefined : undefined,
+                    zoneId: orderType === 'DELIVERY' ? selectedZone?.id : undefined,
+                    notes: orderNotes || undefined,
+                    paymentMethod: paymentMethod,
+                    paymentStatus: 'PAID',
+                    items: cart.map(c => ({
+                        productId: c.productId,
+                        comboId: c.comboId,
+                        variantId: c.variantId,
+                        quantity: c.quantity,
+                        notes: c.notes || undefined,
+                        addons: c.addons.length > 0 ? c.addons.map(a => ({ addonId: a.addonId, quantity: a.quantity })) : undefined,
+                    })),
+                };
+                const saveResult = await saveOffline(offlineId, payload);
+                if (saveResult.success) {
+                    setSuccessOrder({ id: offlineId, code: 'OFFLINE', offline: true });
+                    clearCart();
+                    setShowPayment(false);
+                    setTimeout(() => setSuccessOrder(null), 4000);
+                } else {
+                    alert(`Error offline: ${saveResult.error}`);
+                }
+            } else {
+                alert(`Error: ${err.message}`);
+            }
         } finally {
             setSubmitting(false);
         }
@@ -892,10 +960,13 @@ export const POSView: React.FC<POSViewProps> = ({ token, serverUrl, locationId, 
             {successOrder && (
                 <div className="pos__success-overlay" onClick={() => setSuccessOrder(null)}>
                     <div className="pos__success-card">
-                        <span className="pos__success-icon">✅</span>
-                        <h2>Pedido creado</h2>
+                        <span className="pos__success-icon">{successOrder.offline ? '📴' : '✅'}</span>
+                        <h2>{successOrder.offline ? 'Guardado offline' : 'Pedido creado'}</h2>
                         <p className="pos__success-code">#{successOrder.code}</p>
-                        <p className="pos__success-total">{CURRENCY}{fmt(successOrder.total)}</p>
+                        {successOrder.offline
+                            ? <p className="pos__success-total" style={{ fontSize: '0.9rem', opacity: 0.7 }}>Se enviara al servidor cuando haya conexion</p>
+                            : <p className="pos__success-total">{CURRENCY}{fmt(successOrder.total)}</p>
+                        }
                     </div>
                 </div>
             )}

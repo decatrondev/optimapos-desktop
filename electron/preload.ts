@@ -50,6 +50,41 @@ contextBridge.exposeInMainWorld('electronAPI', {
         return () => ipcRenderer.removeListener('printer-scan-progress', handler);
     },
 
+    // Offline / SQLite
+    offlineCheckConnection: (serverUrl: string): Promise<boolean> =>
+        ipcRenderer.invoke('offline-check-connection', serverUrl),
+    offlineSyncCatalog: (serverUrl: string, token: string, locationId: number): Promise<{ success: boolean; error?: string }> =>
+        ipcRenderer.invoke('offline-sync-catalog', serverUrl, token, locationId),
+    offlineSyncPending: (serverUrl: string, token: string, locationId: number): Promise<{ synced: number; failed: number }> =>
+        ipcRenderer.invoke('offline-sync-pending', serverUrl, token, locationId),
+    offlineHasCatalog: (): Promise<boolean> =>
+        ipcRenderer.invoke('offline-has-catalog'),
+    offlineGetProducts: (): Promise<any[]> =>
+        ipcRenderer.invoke('offline-get-products'),
+    offlineGetCategories: (): Promise<any[]> =>
+        ipcRenderer.invoke('offline-get-categories'),
+    offlineGetCombos: (): Promise<any[]> =>
+        ipcRenderer.invoke('offline-get-combos'),
+    offlineGetTables: (): Promise<any[]> =>
+        ipcRenderer.invoke('offline-get-tables'),
+    offlineGetZones: (): Promise<{ zones: any[]; basePrice: number }> =>
+        ipcRenderer.invoke('offline-get-zones'),
+    offlineGetLastSync: (): Promise<string | null> =>
+        ipcRenderer.invoke('offline-get-last-sync'),
+    offlineSaveOrder: (id: string, payload: any): Promise<{ success: boolean; error?: string }> =>
+        ipcRenderer.invoke('offline-save-order', id, payload),
+    offlineGetPendingOrders: (): Promise<any[]> =>
+        ipcRenderer.invoke('offline-get-pending-orders'),
+    offlineGetPendingCount: (): Promise<number> =>
+        ipcRenderer.invoke('offline-get-pending-count'),
+    offlineRemovePending: (id: string): Promise<void> =>
+        ipcRenderer.invoke('offline-remove-pending', id),
+    onOfflineStatus: (callback: (data: { status: 'connected' | 'reconnecting' | 'offline' }) => void): (() => void) => {
+        const handler = (_event: any, data: any) => callback(data);
+        ipcRenderer.on('offline-status', handler);
+        return () => ipcRenderer.removeListener('offline-status', handler);
+    },
+
     // Auto-Updater
     getAppVersion: (): Promise<string> => ipcRenderer.invoke('get-app-version'),
     updaterCheck: (): Promise<{ success: boolean; version?: string; error?: string }> =>

@@ -31,6 +31,7 @@ import {
     getStoredPrinterId, fetchPrinters,
 } from './services/printer-config.service';
 import { executePrintJob, quickPrint } from './services/print-executor';
+import { useOffline } from './hooks/useOffline';
 
 const CURRENCY_SYMBOL = 'S/';
 
@@ -60,6 +61,7 @@ const OperationalView: React.FC<{
 
     const socketLocId = appConfig?.locationId && appConfig.locationId > 0 ? appConfig.locationId : undefined;
     const { orders, isConnected, hasNewAlert, printJobs, dismissAlert, updateOrderLocally, removeOrder, clearPrintJob } = useSocket(serverUrl, token, socketLocId);
+    const offline = useOffline({ serverUrl, token, locationId: socketLocId ?? null });
     const [initialOrders, setInitialOrders] = useState<Order[]>([]);
     const [rules, setRules] = useState<PrintRule[]>([]);
     const [printerConfig, setPrinterConfig] = useState<import('./types/printer-config').Printer | null>(null);
@@ -278,6 +280,8 @@ const OperationalView: React.FC<{
                         locationId={socketLocId}
                         storeName={storeName}
                         onPrintOrder={handlePrintTicket}
+                        isOffline={offline.isOffline}
+                        saveOfflineOrder={offline.saveOfflineOrder}
                     />
                 );
             case 'kitchen':
@@ -343,6 +347,9 @@ const OperationalView: React.FC<{
                 onChangeServer={onChangeServer}
                 onChangeLocation={onChangeLocation}
                 canChangeLocation={canChangeLocation}
+                offlineStatus={offline.status}
+                pendingOrders={offline.pendingCount}
+                lastSync={offline.lastSync}
             />
 
             {user && (
