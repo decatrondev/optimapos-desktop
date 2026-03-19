@@ -14,12 +14,50 @@ import {
     testTCPConnection,
 } from './printer';
 
+import { exec } from 'child_process';
+
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 // Linux: disable sandbox to avoid SUID permission issues on VMs and some distros
 if (process.platform === 'linux') {
     app.commandLine.appendSwitch('no-sandbox');
     app.commandLine.appendSwitch('disable-gpu-sandbox');
+}
+
+// ─── Windows Firewall: ensure TCP 9100 is allowed (out + in) ───────────────
+function ensureFirewallRule(): void {
+    if (process.platform !== 'win32') return;
+
+    const rules = [
+        { name: 'OptimaPOS Printer Out 9100', dir: 'out', port: 'remoteport=9100' },
+        { name: 'OptimaPOS Printer In 9100', dir: 'in', port: 'localport=9100' },
+    ];
+
+    for (const rule of rules) {
+        exec(`netsh advfirewall firewall show rule name="${rule.name}"`, (err, stdout) => {
+            if (stdout && stdout.includes(rule.name)) {
+                log.info(`[Firewall] "${rule.name}" already exists`);
+                return;
+            }
+            // Try creating the rule directly (works if app runs as admin or user has permission)
+            const addCmd = `netsh advfirewall firewall add rule name="${rule.name}" dir=${rule.dir} action=allow protocol=TCP ${rule.port} enable=yes`;
+            exec(addCmd, (addErr) => {
+                if (addErr) {
+                    log.warn(`[Firewall] Direct add failed for "${rule.name}", trying elevated...`);
+                    const psCmd = `Start-Process -FilePath 'netsh' -ArgumentList 'advfirewall firewall add rule name="${rule.name}" dir=${rule.dir} action=allow protocol=TCP ${rule.port} enable=yes' -Verb RunAs -WindowStyle Hidden -Wait`;
+                    exec(psCmd, { shell: 'powershell.exe' }, (psErr) => {
+                        if (psErr) {
+                            log.error(`[Firewall] Elevated attempt failed for "${rule.name}":`, psErr.message);
+                        } else {
+                            log.info(`[Firewall] "${rule.name}" created via elevation`);
+                        }
+                    });
+                } else {
+                    log.info(`[Firewall] "${rule.name}" created`);
+                }
+            });
+        });
+    }
 }
 
 const isDev = process.env.NODE_ENV === 'development';
@@ -412,6 +450,9 @@ ipcMain.handle('get-app-version', async () => {
 // ─── App Lifecycle ───────────────────────────────────────────────────────────
 
 app.whenReady().then(async () => {
+    // Ensure Windows firewall allows TCP 9100 for network printers
+    ensureFirewallRule();
+
     // Check for updates BEFORE showing the app
     await checkForUpdateOnStartup();
 
