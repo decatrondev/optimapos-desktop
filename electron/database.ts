@@ -29,6 +29,10 @@ function getDb(): Database.Database {
     return db;
 }
 
+export function isDbReady(): boolean {
+    return db !== null;
+}
+
 function createTables(): void {
     const d = getDb();
 

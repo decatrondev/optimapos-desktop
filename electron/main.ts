@@ -16,6 +16,7 @@ import {
 import {
     initDatabase,
     closeDatabase,
+    isDbReady,
     hasCachedCatalog,
     getCachedProducts,
     getCachedCategories,
@@ -444,61 +445,74 @@ ipcMain.handle('printer-list-system', async () => {
 });
 
 // ─── Offline / SQLite IPC ────────────────────────────────────────────────────
+// All SQLite handlers are safe — return empty/false if DB failed to init
 
 ipcMain.handle('offline-check-connection', async (_event, serverUrl: string) => {
     return checkConnection(serverUrl);
 });
 
 ipcMain.handle('offline-sync-catalog', async (_event, serverUrl: string, token: string, locationId: number) => {
+    if (!isDbReady()) return { success: false, error: 'SQLite not available' };
     return syncCatalog({ serverUrl, token, locationId });
 });
 
 ipcMain.handle('offline-sync-pending', async (_event, serverUrl: string, token: string, locationId: number) => {
+    if (!isDbReady()) return { synced: 0, failed: 0 };
     return syncPendingOrders({ serverUrl, token, locationId });
 });
 
 ipcMain.handle('offline-has-catalog', async () => {
+    if (!isDbReady()) return false;
     return hasCachedCatalog();
 });
 
 ipcMain.handle('offline-get-products', async () => {
+    if (!isDbReady()) return [];
     return getCachedProducts();
 });
 
 ipcMain.handle('offline-get-categories', async () => {
+    if (!isDbReady()) return [];
     return getCachedCategories();
 });
 
 ipcMain.handle('offline-get-combos', async () => {
+    if (!isDbReady()) return [];
     return getCachedCombos();
 });
 
 ipcMain.handle('offline-get-tables', async () => {
+    if (!isDbReady()) return [];
     return getCachedTables();
 });
 
 ipcMain.handle('offline-get-zones', async () => {
+    if (!isDbReady()) return { zones: [], basePrice: 0 };
     return getCachedZones();
 });
 
 ipcMain.handle('offline-get-last-sync', async () => {
+    if (!isDbReady()) return null;
     return getLastSyncTime();
 });
 
 ipcMain.handle('offline-save-order', async (_event, id: string, payload: any) => {
+    if (!isDbReady()) return { success: false, error: 'SQLite not available' };
     return saveOfflineOrder(id, payload);
 });
 
 ipcMain.handle('offline-get-pending-orders', async () => {
+    if (!isDbReady()) return [];
     return getPendingOrders();
 });
 
 ipcMain.handle('offline-get-pending-count', async () => {
+    if (!isDbReady()) return 0;
     return getPendingOrderCount();
 });
 
 ipcMain.handle('offline-remove-pending', async (_event, id: string) => {
-    removePendingOrder(id);
+    if (isDbReady()) removePendingOrder(id);
 });
 
 // ─── Updater IPC ─────────────────────────────────────────────────────────────
@@ -536,8 +550,12 @@ ipcMain.handle('get-app-version', async () => {
 // ─── App Lifecycle ───────────────────────────────────────────────────────────
 
 app.whenReady().then(async () => {
-    // Initialize offline database
-    initDatabase();
+    // Initialize offline database (non-fatal if it fails)
+    try {
+        initDatabase();
+    } catch (e: any) {
+        log.error('[DB] Failed to initialize SQLite:', e.message);
+    }
 
     // Ensure Windows firewall allows TCP 9100 for network printers
     ensureFirewallRule();
