@@ -175,7 +175,8 @@ function renderItemsList(
                 let addonText = `  + ${addon.addon.name}`;
                 if (addon.quantity > 1) addonText += ` x${addon.quantity}`;
                 if (showPrices) {
-                    addonText += ` ${formatPrice(addon.price, currencySymbol)}`;
+                    const addonPrice = Number(addon.price) || 0;
+                    addonText += addonPrice === 0 ? ' cortesía' : ` ${formatPrice(addonPrice, currencySymbol)}`;
                 }
                 lines.push(addonText);
             }

@@ -229,6 +229,8 @@ export interface POSAddonGroup {
     id: number;
     name: string;
     type: 'ADDITION' | 'SUGGESTED';
+    isCourtesy?: boolean;
+    courtesyLimit?: number;
     addons: POSAddon[];
 }
 

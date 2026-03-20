@@ -553,8 +553,9 @@ function renderItemsList(
                 const aName = addon.name || addon.addon?.name || '';
                 let addonText = '  + ' + aName;
                 if (addon.quantity > 1) addonText += ' x' + addon.quantity;
-                if (showPrices && addon.price) {
-                    addonText += ' ' + currencySymbol + formatMoney(addon.price);
+                if (showPrices) {
+                    const addonPrice = Number(addon.price) || 0;
+                    addonText += addonPrice === 0 ? ' cortesía' : ' ' + currencySymbol + formatMoney(addon.price);
                 }
                 bytes.push(...line(addonText));
             }

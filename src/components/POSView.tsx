@@ -928,31 +928,62 @@ export const POSView: React.FC<POSViewProps> = ({ token, serverUrl, locationId, 
                 <div className="pos__overlay" onClick={() => setAddonProduct(null)}>
                     <div className="pos__modal" onClick={e => e.stopPropagation()}>
                         <h3 className="pos__modal-title">{addonProduct.name} — Adicionales</h3>
-                        {addonProduct.addonGroups.map(ag => (
-                            <div key={ag.addonGroup.id} className="pos__addon-group">
-                                <h4 className="pos__addon-group-title">{ag.addonGroup.name}</h4>
-                                {ag.addonGroup.addons.map(addon => {
-                                    const qty = addonSelections[addon.id] || 0;
-                                    return (
-                                        <div key={addon.id} className="pos__addon-row">
-                                            <span className="pos__addon-name">{addon.name}</span>
-                                            <span className="pos__addon-price">+{CURRENCY}{fmt(addon.price)}</span>
-                                            <div className="pos__addon-qty">
-                                                <button
-                                                    className="pos__qty-btn"
-                                                    onClick={() => setAddonSelections(prev => ({ ...prev, [addon.id]: Math.max(0, (prev[addon.id] || 0) - 1) }))}
-                                                >−</button>
-                                                <span>{qty}</span>
-                                                <button
-                                                    className="pos__qty-btn"
-                                                    onClick={() => setAddonSelections(prev => ({ ...prev, [addon.id]: (prev[addon.id] || 0) + 1 }))}
-                                                >+</button>
+                        {addonProduct.addonGroups.map(ag => {
+                            const group = ag.addonGroup;
+                            const isCourtesy = group.isCourtesy || false;
+                            const courtesyLimit = group.courtesyLimit || 0;
+                            const selectedInGroup = group.addons.reduce((sum, a) => sum + (addonSelections[a.id] || 0), 0);
+                            const freeRemaining = isCourtesy && courtesyLimit > 0 ? Math.max(0, courtesyLimit - selectedInGroup) : 0;
+                            const limitExceeded = isCourtesy && courtesyLimit > 0 && selectedInGroup > courtesyLimit;
+
+                            return (
+                                <div key={group.id} className="pos__addon-group">
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <h4 className="pos__addon-group-title">{group.name}</h4>
+                                        {isCourtesy && courtesyLimit > 0 && (
+                                            <span style={{ fontSize: 11, fontWeight: 600, color: freeRemaining > 0 ? '#D97706' : '#DC2626' }}>
+                                                {freeRemaining > 0 ? `${freeRemaining} gratis` : 'Límite alcanzado'}
+                                            </span>
+                                        )}
+                                        {isCourtesy && courtesyLimit === 0 && (
+                                            <span style={{ fontSize: 11, fontWeight: 600, color: '#059669' }}>Gratis</span>
+                                        )}
+                                    </div>
+                                    {limitExceeded && (
+                                        <p style={{ fontSize: 11, color: '#DC2626', margin: '2px 0 6px' }}>
+                                            Incluye {courtesyLimit} gratis · extras se cobran
+                                        </p>
+                                    )}
+                                    {group.addons.map(addon => {
+                                        const qty = addonSelections[addon.id] || 0;
+                                        const selectedBefore = group.addons
+                                            .filter(a => a.id !== addon.id)
+                                            .reduce((sum, a) => sum + (addonSelections[a.id] || 0), 0);
+                                        const isFree = isCourtesy && (courtesyLimit === 0 || (qty > 0 && selectedBefore < courtesyLimit));
+
+                                        return (
+                                            <div key={addon.id} className="pos__addon-row">
+                                                <span className="pos__addon-name">{addon.name}</span>
+                                                <span className="pos__addon-price" style={isFree ? { color: '#059669' } : undefined}>
+                                                    {isFree ? 'Gratis' : `+${CURRENCY}${fmt(addon.price)}`}
+                                                </span>
+                                                <div className="pos__addon-qty">
+                                                    <button
+                                                        className="pos__qty-btn"
+                                                        onClick={() => setAddonSelections(prev => ({ ...prev, [addon.id]: Math.max(0, (prev[addon.id] || 0) - 1) }))}
+                                                    >−</button>
+                                                    <span>{qty}</span>
+                                                    <button
+                                                        className="pos__qty-btn"
+                                                        onClick={() => setAddonSelections(prev => ({ ...prev, [addon.id]: (prev[addon.id] || 0) + 1 }))}
+                                                    >+</button>
+                                                </div>
                                             </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        ))}
+                                        );
+                                    })}
+                                </div>
+                            );
+                        })}
                         <div className="pos__modal-actions">
                             <button className="pos__btn pos__btn--clear" onClick={() => setAddonProduct(null)}>Cancelar</button>
                             <button className="pos__btn pos__btn--pay" onClick={confirmAddons}>Agregar al carrito</button>
