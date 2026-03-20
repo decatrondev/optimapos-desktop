@@ -14,13 +14,42 @@ const MAX_OFFLINE_ORDERS = 50;
 
 // ─── Init ────────────────────────────────────────────────────────────────────
 
+const DB_SCHEMA_VERSION = 2; // Bump this when schema changes
+
 export function initDatabase(): void {
     const dbPath = path.join(app.getPath('userData'), 'optimapos-offline.db');
     log.info(`[DB] Opening SQLite at ${dbPath}`);
     db = new Database(dbPath);
     db.pragma('journal_mode = WAL');
     db.pragma('foreign_keys = ON');
+
+    // Check schema version — if outdated, drop all tables and recreate
+    const versionRow = db.prepare("SELECT value FROM catalog_meta WHERE key = 'schema_version'").get() as any;
+    const currentVersion = versionRow ? parseInt(versionRow.value, 10) : 0;
+
+    if (currentVersion < DB_SCHEMA_VERSION) {
+        log.info(`[DB] Schema upgrade ${currentVersion} → ${DB_SCHEMA_VERSION}, rebuilding tables...`);
+        db.exec(`
+            DROP TABLE IF EXISTS combo_items;
+            DROP TABLE IF EXISTS combos;
+            DROP TABLE IF EXISTS addons;
+            DROP TABLE IF EXISTS product_addon_groups;
+            DROP TABLE IF EXISTS addon_groups;
+            DROP TABLE IF EXISTS variants;
+            DROP TABLE IF EXISTS products;
+            DROP TABLE IF EXISTS categories;
+            DROP TABLE IF EXISTS tables_cache;
+            DROP TABLE IF EXISTS zones;
+            DROP TABLE IF EXISTS zones_meta;
+            DROP TABLE IF EXISTS pending_orders;
+            DROP TABLE IF EXISTS catalog_meta;
+        `);
+    }
+
     createTables();
+
+    // Save schema version
+    db.prepare('INSERT OR REPLACE INTO catalog_meta (key, value) VALUES (?, ?)').run('schema_version', String(DB_SCHEMA_VERSION));
     log.info('[DB] Database ready');
 }
 
@@ -75,11 +104,17 @@ function createTables(): void {
         );
 
         CREATE TABLE IF NOT EXISTS addon_groups (
-            id        INTEGER PRIMARY KEY,
-            productId INTEGER NOT NULL,
-            name      TEXT NOT NULL,
-            type      TEXT NOT NULL DEFAULT 'ADDITION',
-            FOREIGN KEY (productId) REFERENCES products(id)
+            id   INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            type TEXT NOT NULL DEFAULT 'ADDITION'
+        );
+
+        CREATE TABLE IF NOT EXISTS product_addon_groups (
+            productId    INTEGER NOT NULL,
+            addonGroupId INTEGER NOT NULL,
+            PRIMARY KEY (productId, addonGroupId),
+            FOREIGN KEY (productId) REFERENCES products(id),
+            FOREIGN KEY (addonGroupId) REFERENCES addon_groups(id)
         );
 
         CREATE TABLE IF NOT EXISTS addons (
@@ -156,6 +191,7 @@ export function replaceCatalog(data: CatalogData): void {
             DELETE FROM combo_items;
             DELETE FROM combos;
             DELETE FROM addons;
+            DELETE FROM product_addon_groups;
             DELETE FROM addon_groups;
             DELETE FROM variants;
             DELETE FROM products;
@@ -175,8 +211,9 @@ export function replaceCatalog(data: CatalogData): void {
         const insProduct = d.prepare(`INSERT INTO products (id, name, price, image, categoryId, isActive, sortOrder, stockEnabled, stockCurrent, promoPrice, promoFrom, promoUntil)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
         const insVariant = d.prepare('INSERT INTO variants (id, productId, name, price, isActive) VALUES (?, ?, ?, ?, ?)');
-        const insAddonGroup = d.prepare('INSERT INTO addon_groups (id, productId, name, type) VALUES (?, ?, ?, ?)');
-        const insAddon = d.prepare('INSERT INTO addons (id, addonGroupId, name, price) VALUES (?, ?, ?, ?)');
+        const insAddonGroup = d.prepare('INSERT OR IGNORE INTO addon_groups (id, name, type) VALUES (?, ?, ?)');
+        const insProductAddonGroup = d.prepare('INSERT OR IGNORE INTO product_addon_groups (productId, addonGroupId) VALUES (?, ?)');
+        const insAddon = d.prepare('INSERT OR IGNORE INTO addons (id, addonGroupId, name, price) VALUES (?, ?, ?, ?)');
 
         for (const p of data.products) {
             const price = typeof p.price === 'string' ? parseFloat(p.price) : p.price;
@@ -195,7 +232,8 @@ export function replaceCatalog(data: CatalogData): void {
             if (p.addonGroups) {
                 for (const ag of p.addonGroups) {
                     const group = ag.addonGroup || ag;
-                    insAddonGroup.run(group.id, p.id, group.name, group.type || 'ADDITION');
+                    insAddonGroup.run(group.id, group.name, group.type || 'ADDITION');
+                    insProductAddonGroup.run(p.id, group.id);
                     if (group.addons) {
                         for (const a of group.addons) {
                             const aPrice = typeof a.price === 'string' ? parseFloat(a.price) : a.price;
@@ -254,6 +292,7 @@ export function getCachedProducts(): any[] {
     const products = d.prepare('SELECT * FROM products WHERE isActive = 1 ORDER BY sortOrder, name').all() as any[];
     const variants = d.prepare('SELECT * FROM variants WHERE isActive = 1').all() as any[];
     const addonGroups = d.prepare('SELECT * FROM addon_groups').all() as any[];
+    const productAddonGroups = d.prepare('SELECT * FROM product_addon_groups').all() as any[];
     const addons = d.prepare('SELECT * FROM addons').all() as any[];
 
     // Group addons by group
@@ -263,13 +302,22 @@ export function getCachedProducts(): any[] {
         addonsByGroup.get(a.addonGroupId)!.push(a);
     }
 
-    // Group addon groups by product
-    const groupsByProduct = new Map<number, any[]>();
+    // Map addon groups by id
+    const groupById = new Map<number, any>();
     for (const ag of addonGroups) {
-        if (!groupsByProduct.has(ag.productId)) groupsByProduct.set(ag.productId, []);
-        groupsByProduct.get(ag.productId)!.push({
-            addonGroup: { ...ag, addons: addonsByGroup.get(ag.id) || [] },
-        });
+        groupById.set(ag.id, ag);
+    }
+
+    // Group addon groups by product via junction table
+    const groupsByProduct = new Map<number, any[]>();
+    for (const pag of productAddonGroups) {
+        if (!groupsByProduct.has(pag.productId)) groupsByProduct.set(pag.productId, []);
+        const ag = groupById.get(pag.addonGroupId);
+        if (ag) {
+            groupsByProduct.get(pag.productId)!.push({
+                addonGroup: { ...ag, addons: addonsByGroup.get(ag.id) || [] },
+            });
+        }
     }
 
     // Group variants by product
