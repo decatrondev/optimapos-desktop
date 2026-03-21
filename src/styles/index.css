@@ -1354,6 +1354,26 @@ body::before {
   transform: scale(1.1);
 }
 
+.btn--refresh {
+  background: none;
+  border: 1px solid var(--border-color);
+  padding: 4px 10px;
+  font-size: 1rem;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background 0.2s, transform 0.2s;
+  -webkit-app-region: no-drag;
+}
+
+.btn--refresh:hover {
+  background: var(--bg-secondary);
+  transform: scale(1.05);
+}
+
+.btn--refresh:active {
+  transform: rotate(180deg);
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    ORDER STATUS BADGES & ADVANCE BUTTON
    ═══════════════════════════════════════════════════════════════════════════ */

@@ -86,28 +86,29 @@ const OperationalView: React.FC<{
         });
     }, [isConnected, appConfig?.apiKey, appConfig?.tenantSlug, appConfig?.locationId, printerId]);
 
-    // Load active orders using the correct endpoint for each role + poll every 30s
+    // Stable reference to load orders (used by poll, refresh button, and initial load)
+    const loadOrders = useCallback(async () => {
+        if (!token) return;
+        const locId = appConfig?.locationId && appConfig.locationId > 0 ? appConfig.locationId : undefined;
+        let fetched: Order[] = [];
+        try {
+            if (userRole === 'KITCHEN') {
+                fetched = await fetchKitchenOrders(token, locId);
+            } else if (userRole === 'DELIVERY') {
+                fetched = await fetchDeliveryOrders(token, locId);
+            } else {
+                fetched = await fetchActiveOrders(token, locId);
+            }
+            console.log(`[Orders] Loaded ${fetched.length} active orders (role: ${userRole}, location: ${locId ?? 'ALL'})`);
+        } catch (e) {
+            console.error('[Orders] Load failed:', e);
+        }
+        setInitialOrders(fetched);
+    }, [token, userRole, appConfig?.locationId]);
+
+    // Load active orders on mount + poll every 30s
     useEffect(() => {
         if (!token) return;
-
-        const locId = appConfig?.locationId && appConfig.locationId > 0 ? appConfig.locationId : undefined;
-
-        const loadOrders = async () => {
-            let fetched: Order[] = [];
-            try {
-                if (userRole === 'KITCHEN') {
-                    fetched = await fetchKitchenOrders(token, locId);
-                } else if (userRole === 'DELIVERY') {
-                    fetched = await fetchDeliveryOrders(token, locId);
-                } else {
-                    fetched = await fetchActiveOrders(token, locId);
-                }
-                console.log(`[Orders] Loaded ${fetched.length} active orders (role: ${userRole}, location: ${locId ?? 'ALL'})`);
-            } catch (e) {
-                console.error('[Orders] Load failed:', e);
-            }
-            setInitialOrders(fetched);
-        };
 
         loadOrders();
 
@@ -116,13 +117,12 @@ const OperationalView: React.FC<{
 
         // Only fetch print rules for roles that have printer_config access (not KITCHEN/DELIVERY)
         if (userRole !== 'KITCHEN' && userRole !== 'DELIVERY') {
+            const locId = appConfig?.locationId && appConfig.locationId > 0 ? appConfig.locationId : undefined;
             fetchRules(token).then(r => {
                 console.log(`[PrintConfig] Loaded ${r.length} rules`);
                 setRules(r);
             }).catch(e => console.error('[PrintConfig] Load failed:', e));
 
-            // Fetch this terminal's printer config for hardware printing
-            const locId = appConfig?.locationId && appConfig.locationId > 0 ? appConfig.locationId : undefined;
             fetchPrinters(token, locId).then(printers => {
                 const myPrinter = printers.find(p => p.id === printerId) || printers.find(p => p.isDefault) || null;
                 if (myPrinter) {
@@ -133,7 +133,7 @@ const OperationalView: React.FC<{
         }
 
         return () => clearInterval(pollInterval);
-    }, [token, userRole]);
+    }, [token, userRole, loadOrders]);
 
     // Process print jobs — autoPrint sends to hardware, manual shows preview
     useEffect(() => {
@@ -349,6 +349,7 @@ const OperationalView: React.FC<{
                 onChangeServer={onChangeServer}
                 onChangeLocation={onChangeLocation}
                 canChangeLocation={canChangeLocation}
+                onRefresh={loadOrders}
                 offlineStatus={offline.status}
                 pendingOrders={offline.pendingCount}
                 lastSync={offline.lastSync}

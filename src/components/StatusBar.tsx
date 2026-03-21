@@ -14,6 +14,7 @@ interface StatusBarProps {
     onChangeServer?: () => void;
     onChangeLocation?: () => void;
     canChangeLocation?: boolean;
+    onRefresh?: () => void;
     offlineStatus?: ConnectionStatus;
     pendingOrders?: number;
     lastSync?: string | null;
@@ -32,7 +33,7 @@ function getRoleBadge(role: string): { label: string; className: string } {
 
 export const StatusBar: React.FC<StatusBarProps> = ({
     storeName, locationName, isConnected, orderCount, user, onLogout, onSettings, onChangeServer, onChangeLocation, canChangeLocation,
-    offlineStatus, pendingOrders, lastSync,
+    onRefresh, offlineStatus, pendingOrders, lastSync,
 }) => {
     const time = useClock();
     const roleBadge = user ? getRoleBadge(user.role) : null;
@@ -86,6 +87,12 @@ export const StatusBar: React.FC<StatusBarProps> = ({
                             </button>
                         )}
                     </div>
+                )}
+
+                {onRefresh && (
+                    <button className="btn btn--refresh" onClick={onRefresh} title="Actualizar datos">
+                        🔄
+                    </button>
                 )}
 
                 <div className="status-bar__orders-badge">
