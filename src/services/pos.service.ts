@@ -2,7 +2,7 @@
  * POS Service — API calls for the Point of Sale view.
  */
 
-import { POSProduct, POSCategory, POSCombo, POSTable, POSZone, OrderType } from '../types/order';
+import { POSProduct, POSCategory, POSCombo, POSTable, POSZone, POSAddonGroup, OrderType } from '../types/order';
 
 async function getServerUrl(): Promise<string> {
     if (window.electronAPI?.getConfig) {
@@ -43,6 +43,15 @@ export async function fetchCombos(token: string, locationId?: number): Promise<P
     if (!res.ok) throw new Error(`Combos: ${res.status}`);
     const data = await res.json();
     return (Array.isArray(data) ? data : data.combos || []).filter((c: any) => c.isActive);
+}
+
+export async function fetchAddonGroups(token: string, locationId?: number): Promise<POSAddonGroup[]> {
+    const serverUrl = await getServerUrl();
+    const params = locationId ? `?locationId=${locationId}` : '';
+    const res = await fetch(`${serverUrl}/api/addons/groups${params}`, { headers: authHeaders(token) });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
 }
 
 // ─── Tables ─────────────────────────────────────────────────────────────────
