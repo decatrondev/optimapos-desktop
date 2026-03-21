@@ -95,6 +95,19 @@ export async function updateDeliveryStatus(orderId: number, status: string, toke
     }
 }
 
+/** Claim a delivery order (driver self-assigns) */
+export async function claimDeliveryOrder(orderId: number, token: string): Promise<void> {
+    const serverUrl = await getServerUrl();
+    const res = await fetch(`${serverUrl}/api/orders/delivery/${orderId}/claim`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    });
+    if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Error ${res.status}`);
+    }
+}
+
 export async function updateOrderStatus(orderId: number, status: OrderStatus, token: string): Promise<void> {
     const serverUrl = await getServerUrl();
     const res = await fetch(`${serverUrl}/api/orders/${orderId}/status`, {

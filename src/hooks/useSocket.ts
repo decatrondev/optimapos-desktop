@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { socketService } from '../services/socket.service';
-import { Order, OrderStatus } from '../types/order';
+import { Order, OrderStatus, Role } from '../types/order';
 import { PrintJob } from '../types/printer-config';
 import { playRepeatingAlert } from '../services/alert.service';
 
@@ -15,7 +15,7 @@ interface UseSocketReturn {
     clearPrintJob: (jobId: string) => void;
 }
 
-export function useSocket(socketUrl: string, token?: string | null, locationId?: number): UseSocketReturn {
+export function useSocket(socketUrl: string, token?: string | null, locationId?: number, userRole?: Role): UseSocketReturn {
     const [orders, setOrders] = useState<Order[]>([]);
     const [isConnected, setIsConnected] = useState(false);
     const [hasNewAlert, setHasNewAlert] = useState(false);
@@ -41,9 +41,18 @@ export function useSocket(socketUrl: string, token?: string | null, locationId?:
                 if (prev.some(o => o.id === order.id)) return prev;
                 return [order, ...prev];
             });
-            setHasNewAlert(true);
-            if (stopAlertRef.current) stopAlertRef.current();
-            stopAlertRef.current = playRepeatingAlert(3000, 3);
+
+            // Role-aware alerts: only sound for relevant orders
+            const shouldAlert = !userRole
+                || userRole === 'ADMIN' || userRole === 'MANAGER' || userRole === 'VENDOR'
+                || (userRole === 'KITCHEN') // kitchen alerts for all orders (they prepare everything)
+                || (userRole === 'DELIVERY' && order.type === 'DELIVERY');
+
+            if (shouldAlert) {
+                setHasNewAlert(true);
+                if (stopAlertRef.current) stopAlertRef.current();
+                stopAlertRef.current = playRepeatingAlert(3000, 3);
+            }
         });
 
         // Listen for order updates (status changes, edits, assignments)
@@ -82,7 +91,7 @@ export function useSocket(socketUrl: string, token?: string | null, locationId?:
             socketService.disconnect();
             if (stopAlertRef.current) stopAlertRef.current();
         };
-    }, [socketUrl, token, locationId]);
+    }, [socketUrl, token, locationId, userRole]);
 
     const dismissAlert = useCallback(() => {
         setHasNewAlert(false);

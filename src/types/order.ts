@@ -53,6 +53,14 @@ export interface Order {
         zone: string | null;
     } | null;
 
+    deliveryUserId: number | null;
+    deliveryUser?: {
+        id: number;
+        name: string;
+        phone: string;
+    } | null;
+    deliveryPhoto: string | null;
+
     items: OrderItem[];
 }
 
