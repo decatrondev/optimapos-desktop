@@ -959,9 +959,9 @@ export const POSView: React.FC<POSViewProps> = ({ token, serverUrl, locationId, 
                                                 borderRadius: 10,
                                                 fontSize: 12,
                                                 fontWeight: 600,
-                                                border: `2px solid ${isExpanded ? '#EAB308' : count > 0 ? '#EAB308' : 'transparent'}`,
-                                                background: isExpanded ? '#EAB308' : count > 0 ? 'rgba(234,179,8,0.1)' : '#f3f4f6',
-                                                color: isExpanded ? '#1a1a1a' : count > 0 ? '#B45309' : '#555',
+                                                border: `2px solid ${isExpanded ? '#EAB308' : count > 0 ? '#EAB308' : 'rgba(255,255,255,0.1)'}`,
+                                                background: isExpanded ? '#EAB308' : count > 0 ? 'rgba(234,179,8,0.1)' : 'rgba(255,255,255,0.06)',
+                                                color: isExpanded ? '#1a1a1a' : count > 0 ? '#EAB308' : '#94a3b8',
                                                 cursor: 'pointer',
                                                 display: 'flex',
                                                 alignItems: 'center',
@@ -993,9 +993,9 @@ export const POSView: React.FC<POSViewProps> = ({ token, serverUrl, locationId, 
                                 const limitExceeded = isCourtesy && courtesyLimit > 0 && selectedInGroup > courtesyLimit;
 
                                 return (
-                                    <div style={{ background: '#f9fafb', borderRadius: 12, padding: 12, border: '1px solid #e5e7eb' }}>
+                                    <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 12, padding: 12, border: '1px solid rgba(255,255,255,0.08)' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                                            <span style={{ fontSize: 13, fontWeight: 700 }}>{expandedGroup.name}</span>
+                                            <span style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9' }}>{expandedGroup.name}</span>
                                             {isCourtesy && courtesyLimit > 0 && (
                                                 <span style={{ fontSize: 11, fontWeight: 600, color: freeRemaining > 0 ? '#D97706' : '#DC2626' }}>
                                                     {freeRemaining > 0 ? `${freeRemaining} gratis restantes` : 'Límite alcanzado'}
@@ -1018,7 +1018,7 @@ export const POSView: React.FC<POSViewProps> = ({ token, serverUrl, locationId, 
 
                                             return (
                                                 <div key={addon.id} className="pos__addon-row" style={{
-                                                    background: qty > 0 ? 'rgba(234,179,8,0.1)' : '#fff',
+                                                    background: qty > 0 ? 'rgba(234,179,8,0.1)' : 'rgba(255,255,255,0.03)',
                                                     border: qty > 0 ? '1px solid #EAB308' : '1px solid transparent',
                                                     borderRadius: 10,
                                                     marginBottom: 4,

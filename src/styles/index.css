@@ -3964,6 +3964,11 @@ body::before {
   appearance: auto;
 }
 
+.pos__select option {
+  background: #1a1d24;
+  color: #f1f5f9;
+}
+
 /* ── Cart items ── */
 
 .pos__items {
