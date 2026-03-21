@@ -74,11 +74,14 @@ export const DeliveryView: React.FC<DeliveryViewProps> = ({
 
     const isDriver = userRole === 'DELIVERY';
 
-    // Filter to delivery orders only
+    // Filter to delivery orders — drivers only see READY_PICKUP + ON_THE_WAY
     useEffect(() => {
-        const deliveryOrders = orders.filter(o =>
-            o.type === 'DELIVERY' && o.status !== 'CANCELLED' && o.status !== 'DELIVERED'
-        );
+        const deliveryOrders = orders.filter(o => {
+            if (o.type !== 'DELIVERY') return false;
+            if (o.status === 'CANCELLED' || o.status === 'DELIVERED') return false;
+            if (isDriver) return o.status === 'READY_PICKUP' || o.status === 'ON_THE_WAY';
+            return true; // Admin/Manager see all statuses
+        });
 
         // Alert sound when new orders arrive (only for DELIVERY type)
         if (!isFirstLoad.current && deliveryOrders.length > prevOrderCount.current) {

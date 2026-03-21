@@ -46,7 +46,7 @@ export function useSocket(socketUrl: string, token?: string | null, locationId?:
             const shouldAlert = !userRole
                 || userRole === 'ADMIN' || userRole === 'MANAGER' || userRole === 'VENDOR'
                 || (userRole === 'KITCHEN') // kitchen alerts for all orders (they prepare everything)
-                || (userRole === 'DELIVERY' && order.type === 'DELIVERY');
+                || (userRole === 'DELIVERY' && order.type === 'DELIVERY' && (order.status === 'READY_PICKUP' || order.status === 'ON_THE_WAY'));
 
             if (shouldAlert) {
                 setHasNewAlert(true);
