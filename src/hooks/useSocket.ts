@@ -83,6 +83,15 @@ export function useSocket(socketUrl: string, token?: string | null, locationId?:
         });
 
         const unsubPrintJob = socketService.onPrintJob((job) => {
+            // DELIVERY role: ignore all print jobs (they don't print tickets)
+            if (userRole === 'DELIVERY') return;
+
+            // KITCHEN role: only process kitchen-related print events
+            if (userRole === 'KITCHEN') {
+                const kitchenEvents = ['kitchen_status_change', 'new_order'];
+                if (!kitchenEvents.includes(job.event)) return;
+            }
+
             console.log(`[PrintJob] Received: ${job.jobId} | ${job.event} | printer: ${job.printer.name}`);
             setPrintJobs(prev => [...prev, job]);
 
