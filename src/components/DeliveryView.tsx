@@ -388,10 +388,10 @@ export const DeliveryView: React.FC<DeliveryViewProps> = ({
 
     // ─── Admin/Manager View: Kanban board ─────────────────────────────
 
-    // Group: "Por Recoger" (before ON_THE_WAY) and "En Camino" (ON_THE_WAY)
-    const toPickupOrders = localOrders.filter(o =>
-        ['PENDING', 'CONFIRMED', 'PREPARING', 'READY_PICKUP'].includes(o.status)
-    );
+    // 4 columns reflecting the delivery flow
+    const pendingOrders = localOrders.filter(o => ['PENDING', 'CONFIRMED'].includes(o.status));
+    const preparingOrders = localOrders.filter(o => o.status === 'PREPARING');
+    const readyOrders = localOrders.filter(o => o.status === 'READY_PICKUP');
     const onTheWayOrders = localOrders.filter(o => o.status === 'ON_THE_WAY');
 
     const renderAdminCard = (order: Order) => {
@@ -440,20 +440,22 @@ export const DeliveryView: React.FC<DeliveryViewProps> = ({
                     <div className="delivery-card__notes">⚠️ {order.notes}</div>
                 )}
 
-                {/* Driver Assignment */}
-                <div className="delivery-card__driver">
-                    <span className="delivery-card__driver-label">🛵 Motorizado:</span>
-                    <select
-                        value={order.deliveryUserId || ''}
-                        onChange={(e) => assignDriver(order.id, e.target.value ? parseInt(e.target.value) : null)}
-                        className="delivery-card__driver-select"
-                    >
-                        <option value="">Sin asignar</option>
-                        {deliveryUsers.map(u => (
-                            <option key={u.id} value={u.id}>{u.name}</option>
-                        ))}
-                    </select>
-                </div>
+                {/* Driver Assignment — only show for READY_PICKUP and ON_THE_WAY */}
+                {['READY_PICKUP', 'ON_THE_WAY'].includes(order.status) && (
+                    <div className="delivery-card__driver">
+                        <span className="delivery-card__driver-label">🛵 Motorizado:</span>
+                        <select
+                            value={order.deliveryUserId || ''}
+                            onChange={(e) => assignDriver(order.id, e.target.value ? parseInt(e.target.value) : null)}
+                            className="delivery-card__driver-select"
+                        >
+                            <option value="">Sin asignar</option>
+                            {deliveryUsers.map(u => (
+                                <option key={u.id} value={u.id}>{u.name}</option>
+                            ))}
+                        </select>
+                    </div>
+                )}
 
                 {/* Items */}
                 <div className="delivery-card__items">
@@ -566,18 +568,46 @@ export const DeliveryView: React.FC<DeliveryViewProps> = ({
                 </div>
             )}
 
-            {/* Two-column board: Por Recoger | En Camino */}
-            <div className="delivery-board">
+            {/* 4-column board: Pendiente | Preparando | Listo | En Camino */}
+            <div className="delivery-board delivery-board--4col">
                 <div className="delivery-column">
-                    <div className="delivery-column__header delivery-column__header--pickup">
-                        📦 Por Recoger
-                        <span className="delivery-column__badge">{toPickupOrders.length}</span>
+                    <div className="delivery-column__header delivery-column__header--pending">
+                        ⏳ Pendiente
+                        <span className="delivery-column__badge">{pendingOrders.length}</span>
                     </div>
                     <div className="delivery-column__content">
-                        {toPickupOrders.length === 0 ? (
-                            <div className="delivery-column__empty">Todo al día</div>
+                        {pendingOrders.length === 0 ? (
+                            <div className="delivery-column__empty">Sin pedidos</div>
                         ) : (
-                            toPickupOrders.map(renderAdminCard)
+                            pendingOrders.map(renderAdminCard)
+                        )}
+                    </div>
+                </div>
+
+                <div className="delivery-column">
+                    <div className="delivery-column__header delivery-column__header--preparing">
+                        🔥 Preparando
+                        <span className="delivery-column__badge">{preparingOrders.length}</span>
+                    </div>
+                    <div className="delivery-column__content">
+                        {preparingOrders.length === 0 ? (
+                            <div className="delivery-column__empty">Sin pedidos</div>
+                        ) : (
+                            preparingOrders.map(renderAdminCard)
+                        )}
+                    </div>
+                </div>
+
+                <div className="delivery-column">
+                    <div className="delivery-column__header delivery-column__header--pickup">
+                        📦 Listo — Asignar
+                        <span className="delivery-column__badge">{readyOrders.length}</span>
+                    </div>
+                    <div className="delivery-column__content">
+                        {readyOrders.length === 0 ? (
+                            <div className="delivery-column__empty">Esperando cocina</div>
+                        ) : (
+                            readyOrders.map(renderAdminCard)
                         )}
                     </div>
                 </div>
@@ -589,7 +619,7 @@ export const DeliveryView: React.FC<DeliveryViewProps> = ({
                     </div>
                     <div className="delivery-column__content">
                         {onTheWayOrders.length === 0 ? (
-                            <div className="delivery-column__empty">No hay viajes activos</div>
+                            <div className="delivery-column__empty">No hay viajes</div>
                         ) : (
                             onTheWayOrders.map(renderAdminCard)
                         )}

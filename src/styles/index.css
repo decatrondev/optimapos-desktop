@@ -2630,13 +2630,18 @@ body::before {
   color: var(--text-secondary);
 }
 
-/* Two-column delivery board */
+/* Delivery board */
 .delivery-board {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
   flex: 1;
   min-height: 0;
+}
+
+.delivery-board--4col {
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
 }
 
 .delivery-column {
@@ -2658,6 +2663,14 @@ body::before {
   color: var(--text-primary);
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
+}
+
+.delivery-column__header--pending {
+  background: linear-gradient(135deg, rgba(234, 179, 8, 0.06), transparent);
+}
+
+.delivery-column__header--preparing {
+  background: linear-gradient(135deg, rgba(249, 115, 22, 0.06), transparent);
 }
 
 .delivery-column__header--pickup {
@@ -2937,6 +2950,13 @@ body::before {
 .delivery-card__actions {
   display: flex;
   gap: 6px;
+  align-items: center;
+}
+
+.delivery-card__waiting {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-style: italic;
 }
 
 /* Action buttons */
@@ -3093,8 +3113,15 @@ body::before {
   background: rgba(239, 68, 68, 0.12);
 }
 
+@media (max-width: 1200px) {
+  .delivery-board--4col {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 @media (max-width: 900px) {
-  .delivery-board {
+  .delivery-board,
+  .delivery-board--4col {
     grid-template-columns: 1fr;
   }
 }
