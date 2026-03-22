@@ -74,12 +74,17 @@ export const DeliveryView: React.FC<DeliveryViewProps> = ({
 
     const isDriver = userRole === 'DELIVERY';
 
-    // Filter to delivery orders — drivers only see READY_PICKUP + ON_THE_WAY
+    // Filter to delivery orders — drivers only see their own + unassigned READY_PICKUP
     useEffect(() => {
         const deliveryOrders = orders.filter(o => {
             if (o.type !== 'DELIVERY') return false;
             if (o.status === 'CANCELLED' || o.status === 'DELIVERED') return false;
-            if (isDriver) return o.status === 'READY_PICKUP' || o.status === 'ON_THE_WAY';
+            if (isDriver) {
+                const isMyOrder = o.deliveryUserId === userId || o.deliveryUser?.id === userId;
+                const isUnassigned = !o.deliveryUserId && !o.deliveryUser;
+                // Show: my assigned orders (any active status) + unassigned READY_PICKUP
+                return isMyOrder || (isUnassigned && o.status === 'READY_PICKUP');
+            }
             return true; // Admin/Manager see all statuses
         });
 
@@ -197,8 +202,8 @@ export const DeliveryView: React.FC<DeliveryViewProps> = ({
 
     // ─── Driver View: "Mis pedidos" + "Sin asignar" ───────────────────
     if (isDriver) {
-        const myOrders = localOrders.filter(o => o.deliveryUser?.id === userId);
-        const unassigned = localOrders.filter(o => !o.deliveryUser && !o.deliveryUserId);
+        const myOrders = localOrders.filter(o => o.deliveryUserId === userId || o.deliveryUser?.id === userId);
+        const unassigned = localOrders.filter(o => !o.deliveryUserId && !o.deliveryUser);
 
         const renderDriverCard = (order: Order, isMine: boolean) => {
             const customerName = order.user?.name || order.guestName || 'Cliente';
