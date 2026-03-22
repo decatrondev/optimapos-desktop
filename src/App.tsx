@@ -373,6 +373,7 @@ const OperationalView: React.FC<{
                 visible={hasNewAlert}
                 onDismiss={dismissAlert}
                 orderCode={latestOrder?.code}
+                userRole={userRole}
             />
 
             {ticketPreview && (

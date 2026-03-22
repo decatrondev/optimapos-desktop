@@ -31,6 +31,12 @@ export function useSocket(socketUrl: string, token?: string | null, locationId?:
             setIsConnected(connected);
         });
 
+        const triggerAlert = () => {
+            setHasNewAlert(true);
+            if (stopAlertRef.current) stopAlertRef.current();
+            stopAlertRef.current = playRepeatingAlert(3000, 3);
+        };
+
         const unsubOrder = socketService.onNewOrder((order) => {
             // Filter by locationId if set (non-ADMIN users)
             if (locationId && order.locationId && order.locationId !== locationId) {
@@ -42,16 +48,12 @@ export function useSocket(socketUrl: string, token?: string | null, locationId?:
                 return [order, ...prev];
             });
 
-            // Role-aware alerts: only sound for relevant orders
-            const shouldAlert = !userRole
-                || userRole === 'ADMIN' || userRole === 'MANAGER' || userRole === 'VENDOR'
-                || (userRole === 'KITCHEN') // kitchen alerts for all orders (they prepare everything)
-                || (userRole === 'DELIVERY' && order.type === 'DELIVERY' && (order.status === 'READY_PICKUP' || order.status === 'ON_THE_WAY'));
-
-            if (shouldAlert) {
-                setHasNewAlert(true);
-                if (stopAlertRef.current) stopAlertRef.current();
-                stopAlertRef.current = playRepeatingAlert(3000, 3);
+            // Role-aware alerts on new_order:
+            // KITCHEN: no alert on new order (wait for CONFIRMED via order_updated)
+            // DELIVERY: no alert on new order (wait for READY_PICKUP via order_updated)
+            // ADMIN/MANAGER/VENDOR: alert on all new orders
+            if (!userRole || ['ADMIN', 'MANAGER', 'VENDOR'].includes(userRole)) {
+                triggerAlert();
             }
         });
 
@@ -63,13 +65,21 @@ export function useSocket(socketUrl: string, token?: string | null, locationId?:
             setOrders((prev) => {
                 const exists = prev.some(o => o.id === updatedOrder.id);
                 if (exists) {
-                    // Update existing order in place
                     return prev.map(o => o.id === updatedOrder.id ? { ...o, ...updatedOrder } : o);
                 } else {
-                    // New order we didn't have yet — add it
                     return [updatedOrder, ...prev];
                 }
             });
+
+            // Role-aware alerts on status updates:
+            // KITCHEN: alert when order becomes CONFIRMED (ready to prepare)
+            if (userRole === 'KITCHEN' && updatedOrder.status === 'CONFIRMED') {
+                triggerAlert();
+            }
+            // DELIVERY: alert when delivery order becomes READY_PICKUP (ready to pick up)
+            if (userRole === 'DELIVERY' && updatedOrder.type === 'DELIVERY' && updatedOrder.status === 'READY_PICKUP') {
+                triggerAlert();
+            }
         });
 
         const unsubPrintJob = socketService.onPrintJob((job) => {

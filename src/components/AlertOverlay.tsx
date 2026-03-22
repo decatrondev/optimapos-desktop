@@ -4,9 +4,10 @@ interface AlertOverlayProps {
     visible: boolean;
     onDismiss: () => void;
     orderCode?: string;
+    userRole?: string;
 }
 
-export const AlertOverlay: React.FC<AlertOverlayProps> = ({ visible, onDismiss, orderCode }) => {
+export const AlertOverlay: React.FC<AlertOverlayProps> = ({ visible, onDismiss, orderCode, userRole }) => {
     const [show, setShow] = useState(false);
 
     useEffect(() => {
@@ -36,8 +37,10 @@ export const AlertOverlay: React.FC<AlertOverlayProps> = ({ visible, onDismiss, 
     return (
         <div className={`alert-overlay ${show ? 'alert-overlay--visible' : 'alert-overlay--hidden'}`} onClick={handleDismiss}>
             <div className="alert-overlay__content">
-                <div className="alert-overlay__icon">🔔</div>
-                <h2 className="alert-overlay__title">¡NUEVO PEDIDO!</h2>
+                <div className="alert-overlay__icon">{userRole === 'KITCHEN' ? '🔥' : userRole === 'DELIVERY' ? '🛵' : '🔔'}</div>
+                <h2 className="alert-overlay__title">
+                    {userRole === 'KITCHEN' ? '¡PEDIDO PARA PREPARAR!' : userRole === 'DELIVERY' ? '¡PEDIDO LISTO PARA ENVÍO!' : '¡NUEVO PEDIDO!'}
+                </h2>
                 {orderCode && <p className="alert-overlay__code">#{orderCode}</p>}
                 <p className="alert-overlay__hint">Click o presiona cualquier tecla para continuar</p>
             </div>
