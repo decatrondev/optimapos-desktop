@@ -53,6 +53,7 @@ export interface Order {
         zone: string | null;
     } | null;
 
+    vendorId: number | null;
     deliveryUserId: number | null;
     deliveryUser?: {
         id: number;

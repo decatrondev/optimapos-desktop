@@ -15,7 +15,7 @@ interface UseSocketReturn {
     clearPrintJob: (jobId: string) => void;
 }
 
-export function useSocket(socketUrl: string, token?: string | null, locationId?: number, userRole?: Role): UseSocketReturn {
+export function useSocket(socketUrl: string, token?: string | null, locationId?: number, userRole?: Role, userId?: number): UseSocketReturn {
     const [orders, setOrders] = useState<Order[]>([]);
     const [isConnected, setIsConnected] = useState(false);
     const [hasNewAlert, setHasNewAlert] = useState(false);
@@ -51,9 +51,12 @@ export function useSocket(socketUrl: string, token?: string | null, locationId?:
             // Role-aware alerts on new_order:
             // KITCHEN: no alert on new order (wait for CONFIRMED via order_updated)
             // DELIVERY: no alert on new order (wait for READY_PICKUP via order_updated)
-            // ADMIN/MANAGER/VENDOR: alert on all new orders
+            // ADMIN/MANAGER/VENDOR: alert — but skip if I created this order myself
             if (!userRole || ['ADMIN', 'MANAGER', 'VENDOR'].includes(userRole)) {
-                triggerAlert();
+                const isMine = userId && order.vendorId === userId;
+                if (!isMine) {
+                    triggerAlert();
+                }
             }
         });
 
@@ -92,6 +95,9 @@ export function useSocket(socketUrl: string, token?: string | null, locationId?:
                 if (!kitchenEvents.includes(job.event)) return;
             }
 
+            // Skip print if I created this order (VENDOR creating from POS)
+            if (userId && job.order?.vendorId === userId && job.event === 'new_order') return;
+
             console.log(`[PrintJob] Received: ${job.jobId} | ${job.event} | printer: ${job.printer.name}`);
             setPrintJobs(prev => [...prev, job]);
 
@@ -110,7 +116,7 @@ export function useSocket(socketUrl: string, token?: string | null, locationId?:
             socketService.disconnect();
             if (stopAlertRef.current) stopAlertRef.current();
         };
-    }, [socketUrl, token, locationId, userRole]);
+    }, [socketUrl, token, locationId, userRole, userId]);
 
     const dismissAlert = useCallback(() => {
         setHasNewAlert(false);

@@ -136,11 +136,10 @@ export function getNextStatus(current: OrderStatus, orderType: string, userRole?
         return null;
     }
 
-    // VENDOR: limited transitions
+    // VENDOR: only confirm orders (kitchen handles the rest)
     if (userRole === 'VENDOR') {
         if (current === 'PENDING') return 'CONFIRMED';
-        if (current === 'CONFIRMED') return 'PREPARING';
-        return null; // Vendor can't advance beyond PREPARING
+        return null;
     }
 
     // ADMIN/MANAGER: full transitions

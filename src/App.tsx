@@ -60,7 +60,7 @@ const OperationalView: React.FC<{
     const [activeView, setActiveView] = useState<ActiveView>(() => getDefaultView(userRole));
 
     const socketLocId = appConfig?.locationId && appConfig.locationId > 0 ? appConfig.locationId : undefined;
-    const { orders, isConnected, hasNewAlert, printJobs, dismissAlert, updateOrderLocally, removeOrder, clearPrintJob } = useSocket(serverUrl, token, socketLocId, userRole as any);
+    const { orders, isConnected, hasNewAlert, printJobs, dismissAlert, updateOrderLocally, removeOrder, clearPrintJob } = useSocket(serverUrl, token, socketLocId, userRole as any, user?.id);
     const offline = useOffline({ serverUrl, token, locationId: socketLocId ?? null });
     const [initialOrders, setInitialOrders] = useState<Order[]>([]);
     const [rules, setRules] = useState<PrintRule[]>([]);
