@@ -11,6 +11,7 @@ interface OrderCardProps {
     onPrint?: (order: Order) => void;
     isNew?: boolean;
     locationLabel?: string;
+    userRole?: string;
 }
 
 function getItemName(item: OrderItem): string {
@@ -34,13 +35,13 @@ function timeAgo(isoString: string): string {
     return `hace ${hrs}h ${mins % 60}m`;
 }
 
-export const OrderCard: React.FC<OrderCardProps> = ({ order, currencySymbol, storeName, onAdvanceStatus, onRemove, onPrint, isNew, locationLabel }) => {
+export const OrderCard: React.FC<OrderCardProps> = ({ order, currencySymbol, storeName, onAdvanceStatus, onRemove, onPrint, isNew, locationLabel, userRole }) => {
     const [advancing, setAdvancing] = useState(false);
     const [statusError, setStatusError] = useState<string | null>(null);
 
     const isCompleted = order.status === 'DELIVERED' || order.status === 'CANCELLED';
     const customerName = order.user?.name || order.guestName || 'Cliente';
-    const nextActionLabel = getNextActionLabel(order.status, order.type);
+    const nextActionLabel = getNextActionLabel(order.status, order.type, userRole);
     const statusLabel = getStatusLabel(order.status);
     const statusClass = getStatusColorClass(order.status);
 

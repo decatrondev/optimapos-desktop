@@ -121,13 +121,38 @@ export async function updateOrderStatus(orderId: number, status: OrderStatus, to
     }
 }
 
-export function getNextStatus(current: OrderStatus, orderType: string): OrderStatus | null {
+export function getNextStatus(current: OrderStatus, orderType: string, userRole?: string): OrderStatus | null {
+    // KITCHEN: only PREPARING and READY transitions (never confirm, never deliver)
+    if (userRole === 'KITCHEN') {
+        if (current === 'CONFIRMED') return 'PREPARING';
+        if (current === 'PREPARING') return 'READY_PICKUP';
+        return null; // Kitchen can't confirm PENDING or deliver
+    }
+
+    // DELIVERY: only delivery-related transitions
+    if (userRole === 'DELIVERY') {
+        if (current === 'READY_PICKUP' && orderType === 'DELIVERY') return 'ON_THE_WAY';
+        if (current === 'ON_THE_WAY') return 'DELIVERED';
+        return null;
+    }
+
+    // VENDOR: limited transitions
+    if (userRole === 'VENDOR') {
+        if (current === 'PENDING') return 'CONFIRMED';
+        if (current === 'CONFIRMED') return 'PREPARING';
+        return null; // Vendor can't advance beyond PREPARING
+    }
+
+    // ADMIN/MANAGER: full transitions
     switch (current) {
         case 'PENDING': return 'CONFIRMED';
         case 'CONFIRMED': return 'PREPARING';
         case 'PREPARING': return orderType === 'DELIVERY' ? 'ON_THE_WAY' : 'READY_PICKUP';
         case 'ON_THE_WAY': return 'DELIVERED';
-        case 'READY_PICKUP': return 'DELIVERED';
+        case 'READY_PICKUP':
+            // DINE_IN must be paid before delivering — handled via close-table, not status advance
+            if (orderType === 'DINE_IN') return null;
+            return 'DELIVERED';
         default: return null;
     }
 }
@@ -145,11 +170,23 @@ export function getStatusLabel(status: OrderStatus): string {
     return labels[status] || status;
 }
 
-export function getNextActionLabel(current: OrderStatus, orderType: string): string | null {
+export function getNextActionLabel(current: OrderStatus, orderType: string, userRole?: string): string | null {
+    // Use getNextStatus to determine if transition is allowed
+    const next = getNextStatus(current, orderType, userRole);
+    if (!next) {
+        // Special case: DINE_IN at READY_PICKUP for ADMIN/MANAGER shows "Cobrar Mesa"
+        if (current === 'READY_PICKUP' && orderType === 'DINE_IN' && (!userRole || ['ADMIN', 'MANAGER', 'VENDOR'].includes(userRole))) {
+            return '💰 Cobrar Mesa';
+        }
+        return null;
+    }
+
     switch (current) {
         case 'PENDING': return '✅ Confirmar';
-        case 'CONFIRMED': return '🔥 Preparar';
-        case 'PREPARING': return orderType === 'DELIVERY' ? '🛵 Enviar' : '📦 Listo';
+        case 'CONFIRMED': return userRole === 'KITCHEN' ? '🔥 Preparar' : '🔥 Preparar';
+        case 'PREPARING':
+            if (userRole === 'KITCHEN') return '📦 Listo';
+            return orderType === 'DELIVERY' ? '🛵 Enviar' : '📦 Listo';
         case 'ON_THE_WAY': return '✔️ Entregado';
         case 'READY_PICKUP': return '✔️ Entregado';
         default: return null;

@@ -10,9 +10,10 @@ interface OrderQueueProps {
     onRemove: (orderId: number) => void;
     onPrint?: (order: Order) => void;
     locationMap?: Record<number, string>;
+    userRole?: string;
 }
 
-export const OrderQueue: React.FC<OrderQueueProps> = ({ orders, currencySymbol, storeName, onAdvanceStatus, onRemove, onPrint, locationMap }) => {
+export const OrderQueue: React.FC<OrderQueueProps> = ({ orders, currencySymbol, storeName, onAdvanceStatus, onRemove, onPrint, locationMap, userRole }) => {
     const activeOrders = orders.filter((o) => o.status !== 'DELIVERED' && o.status !== 'CANCELLED');
     const completedOrders = orders.filter((o) => o.status === 'DELIVERED' || o.status === 'CANCELLED');
 
@@ -50,6 +51,7 @@ export const OrderQueue: React.FC<OrderQueueProps> = ({ orders, currencySymbol, 
                                         onPrint={onPrint}
                                         isNew={idx === 0}
                                         locationLabel={getLocationLabel(order)}
+                                    userRole={userRole}
                                     />
                                 ))}
                             </div>
@@ -73,6 +75,7 @@ export const OrderQueue: React.FC<OrderQueueProps> = ({ orders, currencySymbol, 
                                         onRemove={onRemove}
                                         onPrint={onPrint}
                                         locationLabel={getLocationLabel(order)}
+                                    userRole={userRole}
                                     />
                                 ))}
                             </div>

@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { Order, OrderItem, OrderStatus } from '../types/order';
+import { getNextActionLabel, getNextStatus } from '../services/order.service';
 
 interface KitchenKanbanProps {
     orders: Order[];
@@ -8,6 +9,7 @@ interface KitchenKanbanProps {
     onRemove: (orderId: number) => void;
     onPrint?: (order: Order) => void;
     locationMap?: Record<number, string>;
+    userRole?: string;
 }
 
 type KanbanColumn = 'pending' | 'preparing' | 'ready';
@@ -59,7 +61,8 @@ const KanbanCard: React.FC<{
     onPrint?: (order: Order) => void;
     locationLabel?: string;
     highlightCategories?: Set<string>;
-}> = ({ order, currencySymbol, onAdvance, onRemove, onPrint, locationLabel, highlightCategories }) => {
+    userRole?: string;
+}> = ({ order, currencySymbol, onAdvance, onRemove, onPrint, locationLabel, highlightCategories, userRole }) => {
     const [advancing, setAdvancing] = useState(false);
 
     const typeLabel = order.type === 'DELIVERY' ? '🛵 Delivery' : order.type === 'DINE_IN' ? '🍽️ Mesa' : '🏪 Recojo';
@@ -78,16 +81,7 @@ const KanbanCard: React.FC<{
         }
     };
 
-    const nextLabel = (() => {
-        switch (order.status) {
-            case 'PENDING': return '✅ Confirmar';
-            case 'CONFIRMED': return '🔥 Preparar';
-            case 'PREPARING': return order.type === 'DELIVERY' ? '🛵 Enviar' : '📦 Listo';
-            case 'ON_THE_WAY': return '✔️ Entregado';
-            case 'READY_PICKUP': return '✔️ Entregado';
-            default: return null;
-        }
-    })();
+    const nextLabel = getNextActionLabel(order.status, order.type, userRole);
 
     return (
         <div className={`kanban-card ${isReady ? 'kanban-card--ready' : ''}`}>
@@ -148,7 +142,7 @@ const KanbanCard: React.FC<{
 };
 
 export const KitchenKanban: React.FC<KitchenKanbanProps> = ({
-    orders, currencySymbol, onAdvanceStatus, onRemove, onPrint, locationMap,
+    orders, currencySymbol, onAdvanceStatus, onRemove, onPrint, locationMap, userRole,
 }) => {
     const [stationFilter, setStationFilter] = useState<string | null>(null);
     const [isFullscreen, setIsFullscreen] = useState(false);
@@ -296,6 +290,7 @@ export const KitchenKanban: React.FC<KitchenKanbanProps> = ({
                                         onPrint={onPrint}
                                         locationLabel={getLocationLabel(order)}
                                         highlightCategories={highlightCategories}
+                                        userRole={userRole}
                                     />
                                 ))}
                                 {colOrders.length === 0 && (

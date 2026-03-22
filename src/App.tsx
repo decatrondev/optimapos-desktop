@@ -167,13 +167,13 @@ const OperationalView: React.FC<{
     const handleAdvanceStatus = useCallback(async (orderId: number, orderType: string) => {
         const order = mergedOrders.find(o => o.id === orderId);
         if (!order || !token) return;
-        const nextStatus = getNextStatus(order.status, orderType);
+        const nextStatus = getNextStatus(order.status, orderType, userRole);
         if (!nextStatus) return;
 
         // Use role-specific endpoint for status updates
         if (userRole === 'KITCHEN') {
             // Kitchen maps order status to kitchen status
-            const kitchenStatus = nextStatus === 'CONFIRMED' || nextStatus === 'PREPARING' ? 'PREPARING' : nextStatus === 'READY_PICKUP' || nextStatus === 'ON_THE_WAY' ? 'READY' : null;
+            const kitchenStatus = nextStatus === 'PREPARING' ? 'PREPARING' : nextStatus === 'READY_PICKUP' ? 'READY' : null;
             if (kitchenStatus) {
                 await updateKitchenOrderStatus(orderId, kitchenStatus, token);
             }
@@ -294,6 +294,7 @@ const OperationalView: React.FC<{
                         onRemove={handleRemove}
                         onPrint={handlePrintTicket}
                         locationMap={locationMap}
+                        userRole={userRole}
                     />
                 );
             case 'delivery':
@@ -331,6 +332,7 @@ const OperationalView: React.FC<{
                         onRemove={handleRemove}
                         onPrint={handlePrintTicket}
                         locationMap={locationMap}
+                        userRole={userRole}
                     />
                 );
         }

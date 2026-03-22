@@ -482,7 +482,7 @@ export const DeliveryView: React.FC<DeliveryViewProps> = ({
                         {onPrint && (
                             <button className="btn btn--print btn--sm" onClick={() => onPrint(order)}>🖨️</button>
                         )}
-                        {!isOnTheWay && (
+                        {order.status === 'READY_PICKUP' && (
                             <button
                                 className="btn btn--delivery-go"
                                 onClick={() => updateStatus(order.id, 'ON_THE_WAY')}
@@ -490,6 +490,9 @@ export const DeliveryView: React.FC<DeliveryViewProps> = ({
                             >
                                 {advancing === order.id ? '⏳' : '🛵 Iniciar Viaje'}
                             </button>
+                        )}
+                        {!['READY_PICKUP', 'ON_THE_WAY'].includes(order.status) && (
+                            <span className="delivery-card__waiting">⏳ Esperando preparación...</span>
                         )}
                         {isOnTheWay && (
                             <button
