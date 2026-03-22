@@ -147,12 +147,12 @@ export function getNextStatus(current: OrderStatus, orderType: string, userRole?
     switch (current) {
         case 'PENDING': return 'CONFIRMED';
         case 'CONFIRMED': return 'PREPARING';
-        case 'PREPARING': return orderType === 'DELIVERY' ? 'ON_THE_WAY' : 'READY_PICKUP';
-        case 'ON_THE_WAY': return 'DELIVERED';
+        case 'PREPARING': return 'READY_PICKUP'; // Always goes to READY first (cocina terminó)
         case 'READY_PICKUP':
-            // DINE_IN must be paid before delivering — handled via close-table, not status advance
-            if (orderType === 'DINE_IN') return null;
-            return 'DELIVERED';
+            if (orderType === 'DINE_IN') return null; // DINE_IN must pay via close-table
+            if (orderType === 'DELIVERY') return 'ON_THE_WAY'; // Motorizado sale
+            return 'DELIVERED'; // PICKUP can deliver directly
+        case 'ON_THE_WAY': return 'DELIVERED';
         default: return null;
     }
 }
@@ -183,12 +183,12 @@ export function getNextActionLabel(current: OrderStatus, orderType: string, user
 
     switch (current) {
         case 'PENDING': return '✅ Confirmar';
-        case 'CONFIRMED': return userRole === 'KITCHEN' ? '🔥 Preparar' : '🔥 Preparar';
-        case 'PREPARING':
-            if (userRole === 'KITCHEN') return '📦 Listo';
-            return orderType === 'DELIVERY' ? '🛵 Enviar' : '📦 Listo';
+        case 'CONFIRMED': return '🔥 Preparar';
+        case 'PREPARING': return '📦 Listo';
+        case 'READY_PICKUP':
+            if (orderType === 'DELIVERY') return '🛵 En camino';
+            return '✔️ Entregado';
         case 'ON_THE_WAY': return '✔️ Entregado';
-        case 'READY_PICKUP': return '✔️ Entregado';
         default: return null;
     }
 }
