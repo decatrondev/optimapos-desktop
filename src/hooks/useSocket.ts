@@ -96,7 +96,8 @@ export function useSocket(socketUrl: string, token?: string | null, locationId?:
             }
 
             // Skip print if I created this order (VENDOR creating from POS)
-            if (userId && job.data?.vendorId === userId && job.event === 'new_order') return;
+            const jobVendorId = job.data?.order?.vendorId ?? job.data?.vendorId;
+            if (userId && jobVendorId === userId && ['ORDER_CREATED', 'DELIVERY_TICKET'].includes(job.event)) return;
 
             console.log(`[PrintJob] Received: ${job.jobId} | ${job.event} | printer: ${job.printer.name}`);
             setPrintJobs(prev => [...prev, job]);
