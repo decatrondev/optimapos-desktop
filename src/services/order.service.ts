@@ -21,7 +21,7 @@ export async function fetchActiveOrders(token: string, locationId?: number): Pro
             });
             if (!res.ok) return [];
             const data = await res.json();
-            return (data.orders || []) as Order[];
+            return (data.data || data.orders || []) as Order[];
         } catch {
             return [];
         }
