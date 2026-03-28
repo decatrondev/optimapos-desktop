@@ -1,4 +1,5 @@
 import { Order, OrderItem } from '../types/order';
+import { formatPrice, getItemName } from '../utils/format';
 
 const LINE_WIDTH = 40;
 
@@ -13,18 +14,6 @@ function separator(char = '─'): string {
 
 function doubleSeparator(): string {
     return '═'.repeat(LINE_WIDTH);
-}
-
-function formatPrice(value: string | number, symbol: string): string {
-    const num = typeof value === 'string' ? parseFloat(value) : value;
-    return `${symbol}${num.toFixed(2)}`;
-}
-
-function getItemName(item: OrderItem): string {
-    if (item.product) return item.product.name;
-    if (item.combo) return item.combo.name;
-    if (item.variant) return item.variant.name;
-    return 'Producto desconocido';
 }
 
 function formatDate(isoString: string): string {

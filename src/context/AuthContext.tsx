@@ -24,13 +24,8 @@ interface AuthContextType extends AuthState {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-async function getServerUrl(): Promise<string> {
-    if (window.electronAPI?.getConfig) {
-        const config = await window.electronAPI.getConfig();
-        return config.serverUrl || '';
-    }
-    return import.meta.env.VITE_SOCKET_URL || '';
-}
+// getServerUrl imported from shared api module
+import { getServerUrl, clearServerUrlCache } from '../services/api';
 
 async function fetchPermissions(token: string): Promise<Permission[]> {
     try {

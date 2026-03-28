@@ -24,7 +24,7 @@ const PAYMENT_METHODS: { key: PaymentMethod; label: string; icon: string }[] = [
     { key: 'TRANSFER', label: 'Transfer.', icon: '🏦' },
 ];
 
-const CURRENCY = 'S/';
+import { CURRENCY_SYMBOL as CURRENCY } from '../utils/constants';
 
 /** Safely convert any value (string | number | Decimal) to a number */
 function num(v: any): number {

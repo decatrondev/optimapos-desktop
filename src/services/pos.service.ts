@@ -3,14 +3,7 @@
  */
 
 import { POSProduct, POSCategory, POSCombo, POSTable, POSZone, POSAddonGroup, OrderType } from '../types/order';
-
-async function getServerUrl(): Promise<string> {
-    if (window.electronAPI?.getConfig) {
-        const config = await window.electronAPI.getConfig();
-        return config.serverUrl || '';
-    }
-    return '';
-}
+import { getServerUrl } from './api';
 
 function authHeaders(token: string): HeadersInit {
     return { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };

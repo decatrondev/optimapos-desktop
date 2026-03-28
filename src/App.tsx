@@ -33,7 +33,7 @@ import {
 import { executePrintJob, quickPrint } from './services/print-executor';
 import { useOffline } from './hooks/useOffline';
 
-const CURRENCY_SYMBOL = 'S/';
+import { CURRENCY_SYMBOL } from './utils/constants';
 
 // ─── Main Operational View (role-based) ─────────────────────────────────────
 

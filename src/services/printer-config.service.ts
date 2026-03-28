@@ -1,13 +1,6 @@
 import { Printer, PrintRule, TicketTemplate, DesktopConfig } from '../types/printer-config';
 import { Order } from '../types/order';
-
-async function getServerUrl(): Promise<string> {
-    if (window.electronAPI?.getConfig) {
-        const config = await window.electronAPI.getConfig();
-        return config.serverUrl || '';
-    }
-    return import.meta.env.VITE_SOCKET_URL || '';
-}
+import { getServerUrl } from './api';
 
 // ─── Desktop API (uses API key, no JWT) ──────────────────────────────────────
 

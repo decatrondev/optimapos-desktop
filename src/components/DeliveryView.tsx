@@ -69,6 +69,7 @@ export const DeliveryView: React.FC<DeliveryViewProps> = ({
     const [newOrderFlash, setNewOrderFlash] = useState(false);
     const [advancing, setAdvancing] = useState<number | null>(null);
     const [claiming, setClaiming] = useState<number | null>(null);
+    const [error, setError] = useState<string | null>(null);
     const prevOrderCount = useRef(0);
     const isFirstLoad = useRef(true);
 
@@ -125,9 +126,12 @@ export const DeliveryView: React.FC<DeliveryViewProps> = ({
                 setLocalOrders(prev => prev.map(o =>
                     o.id === orderId ? { ...o, deliveryUserId, deliveryUser: data.order?.deliveryUser } : o
                 ));
+            } else {
+                const errData = await res.json().catch(() => ({}));
+                setError(`Error asignando repartidor: ${errData.message || res.statusText}`);
             }
-        } catch (err) {
-            console.error('Error assigning driver:', err);
+        } catch (err: any) {
+            setError(`Error asignando repartidor: ${err.message || 'Error de conexión'}`);
         }
     }, [serverUrl, token]);
 
@@ -566,6 +570,12 @@ export const DeliveryView: React.FC<DeliveryViewProps> = ({
                     </button>
                 </div>
             </div>
+
+            {error && (
+                <div className="delivery-view__flash" style={{ background: '#dc2626', cursor: 'pointer' }} onClick={() => setError(null)}>
+                    ⚠️ {error}
+                </div>
+            )}
 
             {newOrderFlash && (
                 <div className="delivery-view__flash">

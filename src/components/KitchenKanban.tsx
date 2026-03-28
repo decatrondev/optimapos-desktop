@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { Order, OrderItem, OrderStatus } from '../types/order';
 import { getNextActionLabel, getNextStatus } from '../services/order.service';
+import { getItemName } from '../utils/format';
 
 interface KitchenKanbanProps {
     orders: Order[];
@@ -19,13 +20,6 @@ const COLUMNS: { key: KanbanColumn; title: string; icon: string; statuses: Order
     { key: 'preparing', title: 'En Preparación', icon: '🔥', statuses: ['PREPARING'] },
     { key: 'ready', title: 'Listo', icon: '✅', statuses: ['READY_PICKUP', 'ON_THE_WAY'] },
 ];
-
-function getItemName(item: OrderItem): string {
-    if (item.product) return item.product.name;
-    if (item.combo) return item.combo.name;
-    if (item.variant) return item.variant.name;
-    return 'Producto';
-}
 
 function getItemCategory(item: OrderItem): string | null {
     return item.product?.category?.name || item.combo?.category?.name || null;

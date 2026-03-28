@@ -1,12 +1,5 @@
 import { Order, OrderStatus } from '../types/order';
-
-async function getServerUrl(): Promise<string> {
-    if (window.electronAPI?.getConfig) {
-        const config = await window.electronAPI.getConfig();
-        return config.serverUrl || '';
-    }
-    return import.meta.env.VITE_SOCKET_URL || '';
-}
+import { getServerUrl } from './api';
 
 export async function fetchActiveOrders(token: string, locationId?: number): Promise<Order[]> {
     const serverUrl = await getServerUrl();

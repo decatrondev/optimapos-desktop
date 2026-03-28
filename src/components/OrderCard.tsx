@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Order, OrderItem } from '../types/order';
 import { getNextActionLabel, getStatusLabel, getStatusColorClass } from '../services/order.service';
+import { formatPrice, getItemName } from '../utils/format';
 
 interface OrderCardProps {
     order: Order;
@@ -12,18 +13,6 @@ interface OrderCardProps {
     isNew?: boolean;
     locationLabel?: string;
     userRole?: string;
-}
-
-function getItemName(item: OrderItem): string {
-    if (item.product) return item.product.name;
-    if (item.combo) return `🎁 ${item.combo.name}`;
-    if (item.variant) return item.variant.name;
-    return 'Producto';
-}
-
-function formatPrice(value: string | number, symbol: string): string {
-    const num = typeof value === 'string' ? parseFloat(value) : value;
-    return `${symbol}${num.toFixed(2)}`;
 }
 
 function timeAgo(isoString: string): string {
@@ -98,7 +87,7 @@ export const OrderCard: React.FC<OrderCardProps> = ({ order, currencySymbol, sto
                     <div key={item.id || idx} className="order-card__item">
                         <div className="order-card__item-main">
                             <span className="order-card__item-qty">{item.quantity}x</span>
-                            <span className="order-card__item-name">{getItemName(item)}</span>
+                            <span className="order-card__item-name">{getItemName(item, { comboEmoji: true })}</span>
                             <span className="order-card__item-price">{formatPrice(item.totalPrice, currencySymbol)}</span>
                         </div>
                         {item.addons.length > 0 && (

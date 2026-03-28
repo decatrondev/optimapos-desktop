@@ -77,7 +77,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, error, isLoad
                                 id="email"
                                 type="email"
                                 className="login-card__input"
-                                placeholder="admin@doncarlyn.com"
+                                placeholder="admin@restaurante.com"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 autoFocus

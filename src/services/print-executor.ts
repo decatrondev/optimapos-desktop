@@ -7,21 +7,13 @@
 import { PrintJob } from '../types/printer-config';
 import { renderPrintJobBinary, renderOrderBinary } from './escpos-binary';
 import { socketService } from './socket.service';
-
-const CURRENCY_SYMBOL = 'S/';
+import { getServerUrl } from './api';
+import { CURRENCY_SYMBOL } from '../utils/constants';
 
 export interface PrintResult {
     success: boolean;
     error?: string;
     jobId: string;
-}
-
-async function getServerUrl(): Promise<string> {
-    if (window.electronAPI?.getConfig) {
-        const config = await window.electronAPI.getConfig();
-        return config.serverUrl || '';
-    }
-    return '';
 }
 
 /**

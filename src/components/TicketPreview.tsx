@@ -1,6 +1,9 @@
 import React from 'react';
 import { TicketTemplate, TemplateElement, PrintJob } from '../types/printer-config';
 import { Order, OrderItem } from '../types/order';
+import { formatMoney, formatPrice, getItemName } from '../utils/format';
+import { CURRENCY_SYMBOL } from '../utils/constants';
+import { resolveVariablesKeepUnresolved as resolveVariables, buildVarsFromOrder as buildVariablesFromOrder, buildVarsFromData as buildVariablesFromPrintData } from '../utils/ticket-variables';
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -21,122 +24,9 @@ interface PrintJobPreviewProps {
     onPrint: () => void;
 }
 
-// ─── Variable Resolver ───────────────────────────────────────────────────────
-
-function resolveVariables(text: string, vars: Record<string, string>): string {
-    return text.replace(/\{\{([^}]+)\}\}/g, (match, key) => {
-        return vars[key.trim()] ?? match;
-    });
-}
-
-function buildVariablesFromOrder(order: any, storeName?: string): Record<string, string> {
-    const vars: Record<string, string> = {};
-
-    // Tienda
-    vars['tienda_nombre'] = storeName || '';
-    vars['tienda_ruc'] = '';
-    vars['tienda_direccion'] = '';
-    vars['tienda_telefono'] = '';
-    vars['local_nombre'] = '';
-
-    if (order) {
-        // Pedido
-        vars['pedido_codigo'] = order.code || '';
-        vars['pedido_fecha'] = order.createdAt ? formatDate(order.createdAt) : '';
-        vars['pedido_hora'] = order.createdAt ? formatTime(order.createdAt) : '';
-        vars['pedido_tipo'] = order.type === 'DELIVERY' ? 'Delivery' : order.type === 'DINE_IN' ? 'Mesa' : 'Recojo';
-        vars['pedido_mesa'] = order.tableNumber || order.table?.name || '';
-        vars['pedido_notas'] = order.notes || '';
-        vars['pedido_notas_staff'] = order.staffNotes || '';
-
-        // Cliente
-        vars['cliente_nombre'] = order.user?.name || order.clientName || order.guestName || 'Cliente';
-        vars['cliente_telefono'] = order.user?.phone || order.clientPhone || order.guestPhone || '';
-        vars['cliente_direccion'] = order.clientAddress || order.guestAddress || '';
-
-        // Pago
-        vars['pago_metodo'] = order.paymentMethod || '';
-        vars['pago_estado'] = order.paymentStatus || '';
-
-        // Montos
-        vars['subtotal'] = formatMoney(order.subtotal);
-        vars['descuento'] = formatMoney(order.discount);
-        vars['delivery_fee'] = formatMoney(order.deliveryFee);
-        vars['total'] = formatMoney(order.total);
-
-        // Personal
-        vars['cajero_nombre'] = order.vendorName || '';
-        vars['mozo_nombre'] = '';
-    }
-
-    // Sistema
-    vars['fecha_actual'] = formatDate(new Date().toISOString());
-
-    return vars;
-}
-
-function buildVariablesFromPrintData(data: Record<string, any>): Record<string, string> {
-    const vars: Record<string, string> = {};
-
-    // Tienda (from tenant info if available)
-    vars['tienda_nombre'] = '';
-    vars['tienda_ruc'] = '';
-    vars['tienda_direccion'] = '';
-    vars['tienda_telefono'] = '';
-    vars['local_nombre'] = '';
-
-    if (data.order) {
-        const o = data.order;
-        vars['pedido_codigo'] = o.code || '';
-        vars['pedido_fecha'] = o.createdAt ? formatDate(o.createdAt) : '';
-        vars['pedido_hora'] = o.createdAt ? formatTime(o.createdAt) : '';
-        vars['pedido_tipo'] = o.type === 'DELIVERY' ? 'Delivery' : o.type === 'DINE_IN' ? 'Mesa' : 'Recojo';
-        vars['pedido_mesa'] = o.tableNumber || '';
-        vars['pedido_notas'] = o.notes || '';
-        vars['pedido_notas_staff'] = o.staffNotes || '';
-        vars['cliente_nombre'] = o.clientName || '';
-        vars['cliente_telefono'] = o.clientPhone || '';
-        vars['cliente_direccion'] = o.clientAddress || '';
-        vars['pago_metodo'] = o.paymentMethod || '';
-        vars['pago_estado'] = o.paymentStatus || '';
-        vars['subtotal'] = formatMoney(o.subtotal);
-        vars['descuento'] = formatMoney(o.discount);
-        vars['delivery_fee'] = formatMoney(o.deliveryFee);
-        vars['total'] = formatMoney(o.total);
-        vars['cajero_nombre'] = o.vendorName || '';
-    }
-
-    if (data.cashRegister) {
-        const c = data.cashRegister;
-        vars['caja_apertura'] = formatMoney(c.openingAmount);
-        vars['caja_total'] = formatMoney(c.closingAmount);
-        vars['caja_total_ventas'] = formatMoney(c.totalSales);
-        vars['caja_num_ordenes'] = String(c.totalOrders || 0);
-        vars['cajero_nombre'] = c.userName || vars['cajero_nombre'] || '';
-        vars['local_nombre'] = c.locationName || '';
-    }
-
-    if (data.tableChange) {
-        vars['mesa_anterior'] = data.tableChange.from || '';
-        vars['mesa_nueva'] = data.tableChange.to || '';
-    }
-
-    vars['fecha_actual'] = formatDate(new Date().toISOString());
-    return vars;
-}
+// Variables, buildVariablesFromOrder, buildVariablesFromPrintData imported from shared utils
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function formatMoney(value: any): string {
-    if (value == null) return '0.00';
-    const num = typeof value === 'string' ? parseFloat(value) : Number(value);
-    return isNaN(num) ? '0.00' : num.toFixed(2);
-}
-
-function formatPrice(value: string | number, symbol: string): string {
-    const num = typeof value === 'string' ? parseFloat(value) : value;
-    return `${symbol}${num.toFixed(2)}`;
-}
 
 function formatDate(isoString: string): string {
     const d = new Date(isoString);
@@ -146,13 +36,6 @@ function formatDate(isoString: string): string {
 function formatTime(isoString: string): string {
     const d = new Date(isoString);
     return d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: true });
-}
-
-function getItemName(item: OrderItem | any): string {
-    if (item.product) return item.product.name || item.productName || 'Producto';
-    if (item.combo) return item.combo.name || 'Combo';
-    if (item.variant) return item.variant.name || 'Variante';
-    return item.productName || 'Producto';
 }
 
 // ─── Element Style ───────────────────────────────────────────────────────────
@@ -413,7 +296,7 @@ export const PrintJobPreview: React.FC<PrintJobPreviewProps> = ({
     const vars = buildVariablesFromPrintData(job.data);
     const elements = job.template.content?.elements || [];
     const items = job.data.order?.items || job.data.newItems || [];
-    const currencySymbol = 'S/';
+    const currencySymbol = CURRENCY_SYMBOL;
 
     const eventLabels: Record<string, string> = {
         ORDER_CREATED: '🆕 Nuevo Pedido',

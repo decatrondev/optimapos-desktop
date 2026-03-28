@@ -1,13 +1,5 @@
 import { AuthUser, LoginResponse, AppConfig } from '../types/order';
-
-/** Get the server URL from config or fallback */
-async function getServerUrl(): Promise<string> {
-    if (window.electronAPI?.getConfig) {
-        const config = await window.electronAPI.getConfig();
-        if (config.serverUrl) return config.serverUrl;
-    }
-    return import.meta.env.VITE_SOCKET_URL || '';
-}
+import { getServerUrl } from './api';
 
 export class AuthError extends Error {
     constructor(message: string, public statusCode?: number) {

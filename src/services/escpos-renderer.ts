@@ -41,17 +41,8 @@ function sep(char: string, lineWidth: number): string {
     return char.repeat(lineWidth);
 }
 
-function formatPrice(value: string | number, symbol: string): string {
-    const num = typeof value === 'string' ? parseFloat(value) : value;
-    return `${symbol}${num.toFixed(2)}`;
-}
-
-function getItemName(item: OrderItem): string {
-    if (item.product) return item.product.name;
-    if (item.combo) return item.combo.name;
-    if (item.variant) return item.variant.name;
-    return 'Producto';
-}
+import { formatPrice, formatMoney, getItemName } from '../utils/format';
+import { resolveVariables, buildVarsFromOrder as buildVariables, buildVarsFromData as buildVariablesFromData } from '../utils/ticket-variables';
 
 function formatDate(isoString: string): string {
     const d = new Date(isoString);
@@ -233,90 +224,7 @@ function renderBarcode(el: TemplateElement, order: Order, lineWidth: number): st
     ];
 }
 
-// ─── Variable Resolution ─────────────────────────────────────────────────────
-
-function resolveVariables(text: string, vars: Record<string, string>): string {
-    return text.replace(/\{\{([^}]+)\}\}/g, (_match, key) => {
-        return vars[key.trim()] ?? '';
-    });
-}
-
-function buildVariables(order: Order, storeName?: string): Record<string, string> {
-    const vars: Record<string, string> = {};
-    vars['tienda_nombre'] = storeName || '';
-    vars['tienda_ruc'] = '';
-    vars['tienda_direccion'] = '';
-    vars['tienda_telefono'] = '';
-    vars['local_nombre'] = '';
-
-    if (order) {
-        vars['pedido_codigo'] = order.code || '';
-        vars['pedido_fecha'] = order.createdAt ? formatDate(order.createdAt) : '';
-        vars['pedido_hora'] = order.createdAt ? new Date(order.createdAt).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: true }) : '';
-        vars['pedido_tipo'] = order.type === 'DELIVERY' ? 'Delivery' : order.type === 'DINE_IN' ? 'Mesa' : 'Recojo';
-        vars['pedido_mesa'] = (order as any).tableNumber || (order as any).table?.name || '';
-        vars['pedido_notas'] = order.notes || '';
-        vars['cliente_nombre'] = order.user?.name || order.guestName || 'Cliente';
-        vars['cliente_telefono'] = order.user?.phone || order.guestPhone || '';
-        vars['cliente_direccion'] = order.guestAddress || '';
-        vars['pago_metodo'] = (order as any).paymentMethod || '';
-        vars['subtotal'] = formatMoney(order.subtotal);
-        vars['descuento'] = formatMoney(order.discount);
-        vars['delivery_fee'] = formatMoney(order.deliveryFee);
-        vars['total'] = formatMoney(order.total);
-        vars['cajero_nombre'] = (order as any).vendorName || '';
-    }
-
-    vars['fecha_actual'] = formatDate(new Date().toISOString());
-    return vars;
-}
-
-function buildVariablesFromData(data: Record<string, any>): Record<string, string> {
-    const vars: Record<string, string> = {};
-    vars['tienda_nombre'] = '';
-    vars['tienda_ruc'] = '';
-    vars['tienda_direccion'] = '';
-    vars['tienda_telefono'] = '';
-    vars['local_nombre'] = '';
-
-    if (data.order) {
-        const o = data.order;
-        vars['pedido_codigo'] = o.code || '';
-        vars['pedido_fecha'] = o.createdAt ? formatDate(o.createdAt) : '';
-        vars['pedido_hora'] = o.createdAt ? new Date(o.createdAt).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: true }) : '';
-        vars['pedido_tipo'] = o.type === 'DELIVERY' ? 'Delivery' : o.type === 'DINE_IN' ? 'Mesa' : 'Recojo';
-        vars['pedido_mesa'] = o.tableNumber || '';
-        vars['pedido_notas'] = o.notes || '';
-        vars['cliente_nombre'] = o.clientName || o.guestName || '';
-        vars['cliente_telefono'] = o.clientPhone || o.guestPhone || '';
-        vars['cliente_direccion'] = o.clientAddress || o.guestAddress || '';
-        vars['pago_metodo'] = o.paymentMethod || '';
-        vars['subtotal'] = formatMoney(o.subtotal);
-        vars['descuento'] = formatMoney(o.discount);
-        vars['delivery_fee'] = formatMoney(o.deliveryFee);
-        vars['total'] = formatMoney(o.total);
-        vars['cajero_nombre'] = o.vendorName || '';
-    }
-
-    if (data.cashRegister) {
-        const c = data.cashRegister;
-        vars['caja_apertura'] = formatMoney(c.openingAmount);
-        vars['caja_total'] = formatMoney(c.closingAmount);
-        vars['caja_total_ventas'] = formatMoney(c.totalSales);
-        vars['caja_num_ordenes'] = String(c.totalOrders || 0);
-        vars['cajero_nombre'] = c.userName || vars['cajero_nombre'] || '';
-        vars['local_nombre'] = c.locationName || '';
-    }
-
-    vars['fecha_actual'] = formatDate(new Date().toISOString());
-    return vars;
-}
-
-function formatMoney(value: any): string {
-    if (value == null) return '0.00';
-    const num = typeof value === 'string' ? parseFloat(value) : Number(value);
-    return isNaN(num) ? '0.00' : num.toFixed(2);
-}
+// Variables, formatMoney, buildVariables, buildVariablesFromData imported from shared utils
 
 // ─── Main Renderer ────────────────────────────────────────────────────────────
 
