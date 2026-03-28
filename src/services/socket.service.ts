@@ -30,7 +30,7 @@ class SocketService {
         if (this.socket?.connected) return;
 
         this.socket = io(url, {
-            transports: ['websocket', 'polling'],
+            transports: ['polling', 'websocket'],
             reconnection: true,
             reconnectionAttempts: Infinity,
             reconnectionDelay: 2000,
