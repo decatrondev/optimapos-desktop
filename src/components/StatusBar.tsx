@@ -40,7 +40,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
     const time = useClock();
     const roleBadge = user ? getRoleBadge(user.role) : null;
 
-    const isOffline = offlineStatus === 'disconnected' || (!offlineStatus && !isConnected);
+    const isOffline = offlineStatus === 'offline' || (!offlineStatus && !isConnected);
     const isReconnecting = offlineStatus === 'reconnecting';
 
     return (

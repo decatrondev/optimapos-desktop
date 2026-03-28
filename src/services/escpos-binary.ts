@@ -152,7 +152,7 @@ function resetStyle(): number[] {
 // ─── Shared imports ─────────────────────────────────────────────────────────
 
 import { formatMoney, getItemName } from '../utils/format';
-import { resolveVariables as resolveVars, buildVarsFromOrder, buildVarsFromData } from '../utils/ticket-variables';
+import { resolveVariables as resolveVars, buildVarsFromOrder, buildVarsFromData, formatDate, formatTime } from '../utils/ticket-variables';
 
 // ─── Image Rendering (Raster Bitmap) ────────────────────────────────────────
 

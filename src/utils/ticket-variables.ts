@@ -7,14 +7,14 @@ import { formatMoney } from './format';
 
 // ─── Date/Time Helpers ─────────────────────────────────────────────────────
 
-function formatDate(iso: string): string {
+export function formatDate(iso: string): string {
     try {
         const d = new Date(iso);
         return d.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Lima' });
     } catch { return ''; }
 }
 
-function formatTime(iso: string): string {
+export function formatTime(iso: string): string {
     try {
         const d = new Date(iso);
         return d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Lima' });

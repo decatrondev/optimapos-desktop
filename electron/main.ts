@@ -202,7 +202,7 @@ function createWindow(): void {
     const wsOrigin = serverOrigin.replace(/^https?:/, 'wss:');
     const connectSrc = ['\'self\'', serverOrigin, wsOrigin, 'https://*.decatron.net', 'wss://*.decatron.net'].filter(Boolean).join(' ');
 
-    require('electron').session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    require('electron').session.defaultSession.webRequest.onHeadersReceived((details: any, callback: any) => {
         callback({
             responseHeaders: {
                 ...details.responseHeaders,

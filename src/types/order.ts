@@ -194,6 +194,19 @@ export interface ElectronAPI {
     offlineRemovePending: (id: string) => Promise<void>;
     onOfflineStatus: (callback: (data: { status: 'connected' | 'reconnecting' | 'offline' }) => void) => () => void;
 
+    // Image cache
+    imageCacheGet: (url: string) => Promise<string | null>;
+    imageCacheStore: (url: string) => Promise<string | null>;
+
+    // Window controls
+    setAlwaysOnTop: (value: boolean) => Promise<void>;
+    printerScanCancel: () => Promise<void>;
+
+    // Multi-monitor
+    openKitchenWindow: () => Promise<{ success: boolean; display?: string; alreadyOpen?: boolean }>;
+    closeKitchenWindow: () => Promise<void>;
+    getDisplayCount: () => Promise<number>;
+
     // Auto-Updater
     getAppVersion: () => Promise<string>;
     updaterCheck: () => Promise<{ success: boolean; version?: string; error?: string }>;
