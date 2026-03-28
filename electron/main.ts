@@ -199,15 +199,23 @@ function createWindow(): void {
 
     // Content-Security-Policy — restrict what the renderer can load
     const serverOrigin = config.serverUrl ? new URL(config.serverUrl).origin : '';
-    const wsOrigin = serverOrigin.replace(/^https?:/, 'wss:');
-    const connectSrc = ['\'self\'', serverOrigin, wsOrigin, 'https://*.decatron.net', 'wss://*.decatron.net'].filter(Boolean).join(' ');
 
     require('electron').session.defaultSession.webRequest.onHeadersReceived((details: any, callback: any) => {
         callback({
             responseHeaders: {
                 ...details.responseHeaders,
                 'Content-Security-Policy': [
-                    `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https://*.decatron.net ${serverOrigin}; connect-src ${connectSrc}; font-src 'self' data: https://fonts.gstatic.com; object-src 'none'; base-uri 'self'`,
+                    [
+                        "default-src 'self'",
+                        "script-src 'self'",
+                        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+                        "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com",
+                        `img-src 'self' data: https://*.decatron.net ${serverOrigin}`.trim(),
+                        `connect-src 'self' https://*.decatron.net wss://*.decatron.net ws://*.decatron.net ${serverOrigin} ${serverOrigin.replace(/^https?:/, 'wss:')} ${serverOrigin.replace(/^https?:/, 'ws:')}`.trim(),
+                        "font-src 'self' data: https://fonts.gstatic.com",
+                        "object-src 'none'",
+                        "base-uri 'self'",
+                    ].join('; '),
                 ],
             },
         });
