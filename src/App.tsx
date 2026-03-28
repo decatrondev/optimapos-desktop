@@ -59,6 +59,26 @@ const OperationalView: React.FC<{
     // Default view based on role
     const [activeView, setActiveView] = useState<ActiveView>(() => getDefaultView(userRole));
 
+    // Keyboard shortcuts: Ctrl+1..6 for view navigation
+    useEffect(() => {
+        const views: ActiveView[] = ['dashboard', 'pos', 'kitchen', 'orders', 'delivery', 'cash'];
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (!e.ctrlKey && !e.metaKey) return;
+            const num = parseInt(e.key);
+            if (num >= 1 && num <= 6) {
+                e.preventDefault();
+                const view = views[num - 1];
+                if (view) setActiveView(view);
+            }
+            if (e.key === 'r' || e.key === 'R') {
+                e.preventDefault();
+                window.location.reload();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
+
     const socketLocId = appConfig?.locationId && appConfig.locationId > 0 ? appConfig.locationId : undefined;
     const { orders, isConnected, hasNewAlert, printJobs, dismissAlert, updateOrderLocally, removeOrder, clearPrintJob } = useSocket(serverUrl, token, socketLocId, userRole as any, user?.id);
     const offline = useOffline({ serverUrl, token, locationId: socketLocId ?? null });
@@ -67,6 +87,7 @@ const OperationalView: React.FC<{
     const [printerConfig, setPrinterConfig] = useState<import('./types/printer-config').Printer | null>(null);
     const [ticketPreview, setTicketPreview] = useState<{ order: Order; template: TicketTemplate } | null>(null);
     const [activePrintJob, setActivePrintJob] = useState<PrintJob | null>(null);
+    const [printError, setPrintError] = useState<string | null>(null);
 
     // Desktop socket auth (API key based)
     useEffect(() => {
@@ -143,6 +164,8 @@ const OperationalView: React.FC<{
                 executePrintJob(job).then(result => {
                     if (!result.success) {
                         console.error(`[AutoPrint] Failed: ${result.error}`);
+                        setPrintError(`Error imprimiendo: ${result.error || 'Error desconocido'}`);
+                        setTimeout(() => setPrintError(null), 8000);
                     }
                 });
                 clearPrintJob(job.jobId);
@@ -386,6 +409,20 @@ const OperationalView: React.FC<{
                 orderCode={latestOrder?.code}
                 userRole={userRole}
             />
+
+            {printError && (
+                <div style={{
+                    position: 'fixed', bottom: '20px', right: '20px', zIndex: 9999,
+                    background: '#dc2626', color: '#fff', padding: '12px 20px',
+                    borderRadius: '8px', fontSize: '13px', fontWeight: 500,
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.3)', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: '8px', maxWidth: '400px',
+                }} onClick={() => setPrintError(null)}>
+                    <span>🖨️</span>
+                    <span>{printError}</span>
+                    <span style={{ opacity: 0.6, fontSize: '11px' }}>✕</span>
+                </div>
+            )}
 
             {ticketPreview && (
                 <TicketPreview

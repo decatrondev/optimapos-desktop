@@ -661,7 +661,17 @@ export const POSView: React.FC<POSViewProps> = ({ token, serverUrl, locationId, 
                     ))}
 
                     {filteredProducts.length === 0 && filteredCombos.length === 0 && (
-                        <div className="pos__grid-empty">Sin resultados</div>
+                        <div className="pos__grid-empty" style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '48px 24px' }}>
+                            <div style={{ fontSize: '48px', marginBottom: '12px' }}>{products.length === 0 ? '📦' : '🔍'}</div>
+                            <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '4px' }}>
+                                {products.length === 0 ? 'No hay productos configurados' : 'Sin resultados'}
+                            </div>
+                            {products.length === 0 && (
+                                <div style={{ fontSize: '13px', opacity: 0.6 }}>
+                                    Agrega productos desde el panel web para este local
+                                </div>
+                            )}
+                        </div>
                     )}
                 </div>
             </div>
@@ -903,7 +913,7 @@ export const POSView: React.FC<POSViewProps> = ({ token, serverUrl, locationId, 
                             <button
                                 className="pos__btn pos__btn--pay"
                                 onClick={openOrder ? closeTable : submitOrder}
-                                disabled={submitting || (paymentMethod === 'CASH' && cashReceived !== '' && parseFloat(cashReceived) < total)}
+                                disabled={submitting || (paymentMethod === 'CASH' && (cashReceived === '' || parseFloat(cashReceived) < total))}
                             >
                                 {submitting ? '⏳ Procesando...' : `✅ Confirmar ${CURRENCY}${total.toFixed(2)}`}
                             </button>

@@ -38,7 +38,33 @@ export const StatusBar: React.FC<StatusBarProps> = ({
     const time = useClock();
     const roleBadge = user ? getRoleBadge(user.role) : null;
 
+    const isOffline = offlineStatus === 'disconnected' || (!offlineStatus && !isConnected);
+    const isReconnecting = offlineStatus === 'reconnecting';
+
     return (
+        <>
+        {(isOffline || isReconnecting) && (
+            <div className="offline-banner" style={{
+                background: isReconnecting ? '#d97706' : '#dc2626',
+                color: '#fff',
+                textAlign: 'center',
+                padding: '6px 12px',
+                fontSize: '13px',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+            }}>
+                <span>{isReconnecting ? '🔄' : '📴'}</span>
+                <span>{isReconnecting ? 'Reconectando al servidor...' : 'Trabajando sin conexion — los pedidos se sincronizaran al reconectar'}</span>
+                {pendingOrders != null && pendingOrders > 0 && (
+                    <span style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '10px', padding: '2px 8px', fontSize: '12px' }}>
+                        {pendingOrders} pendiente{pendingOrders > 1 ? 's' : ''}
+                    </span>
+                )}
+            </div>
+        )}
         <header className="status-bar">
             <div className="status-bar__left">
                 <div className="status-bar__logo">
@@ -120,5 +146,6 @@ export const StatusBar: React.FC<StatusBarProps> = ({
                 </div>
             </div>
         </header>
+        </>
     );
 };
