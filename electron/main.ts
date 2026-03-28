@@ -39,6 +39,7 @@ import {
 } from './offline-sync';
 
 import { exec } from 'child_process';
+import { cacheImage, getCachedImage, cleanupCache } from './image-cache';
 
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
@@ -214,7 +215,7 @@ function createWindow(): void {
         height: 800,
         minWidth: 900,
         minHeight: 600,
-        title: titleParts.join(' — '),
+        title: titleParts.join(' - '),
         autoHideMenuBar: true,
         backgroundColor: '#0a0c10',
         webPreferences: {
@@ -391,7 +392,7 @@ ipcMain.handle('save-config', async (_event, updates: Partial<AppConfig>) => {
         const parts = ['OptimaPOS Terminal'];
         if (config.tenantName) parts.push(config.tenantName);
         if (config.locationName) parts.push(config.locationName);
-        mainWindow.setTitle(parts.join(' — '));
+        mainWindow.setTitle(parts.join(' - '));
     }
     return config;
 });
@@ -529,6 +530,23 @@ ipcMain.handle('printer-scan-network', async () => {
     );
 });
 
+// Image cache
+ipcMain.handle('image-cache-get', async (_event, url: string) => {
+    return getCachedImage(url);
+});
+
+ipcMain.handle('image-cache-store', async (_event, url: string) => {
+    return cacheImage(url);
+});
+
+// Window: always-on-top toggle
+ipcMain.handle('set-always-on-top', async (_event, value: boolean) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.setAlwaysOnTop(value);
+        log.info(`[Window] Always on top: ${value}`);
+    }
+});
+
 // Cancel network scan
 ipcMain.handle('printer-scan-cancel', async () => {
     cancelNetworkScan();
@@ -654,6 +672,9 @@ app.whenReady().then(async () => {
 
     // Ensure Windows firewall allows TCP 9100 for network printers
     ensureFirewallRule();
+
+    // Clean up old cached images
+    cleanupCache();
 
     // Show the app immediately, then check for updates in background
     createWindow();

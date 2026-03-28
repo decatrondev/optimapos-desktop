@@ -121,10 +121,24 @@ export function useOffline({ serverUrl, token, locationId }: UseOfflineOptions):
 
     const saveOfflineOrder = useCallback(async (id: string, payload: any) => {
         if (!api) return { success: false, error: 'No electron API' };
+        // Validate token is not expired before queuing offline order
+        if (token) {
+            try {
+                const payloadPart = token.split('.')[1];
+                if (payloadPart) {
+                    const decoded = JSON.parse(atob(payloadPart));
+                    if (decoded.exp && decoded.exp * 1000 < Date.now()) {
+                        return { success: false, error: 'Sesion expirada — inicia sesion nuevamente' };
+                    }
+                }
+            } catch {
+                // If token can't be decoded, allow the order (fail open for offline)
+            }
+        }
         const result = await api.offlineSaveOrder(id, payload);
         setPendingCount(await api.offlineGetPendingCount());
         return result;
-    }, [api]);
+    }, [api, token]);
 
     return {
         status,

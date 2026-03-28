@@ -85,6 +85,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
         return () => ipcRenderer.removeListener('offline-status', handler);
     },
 
+    // Image cache
+    imageCacheGet: (url: string): Promise<string | null> => ipcRenderer.invoke('image-cache-get', url),
+    imageCacheStore: (url: string): Promise<string | null> => ipcRenderer.invoke('image-cache-store', url),
+
+    // Window controls
+    setAlwaysOnTop: (value: boolean): Promise<void> => ipcRenderer.invoke('set-always-on-top', value),
+    printerScanCancel: (): Promise<void> => ipcRenderer.invoke('printer-scan-cancel'),
+
     // Auto-Updater
     getAppVersion: (): Promise<string> => ipcRenderer.invoke('get-app-version'),
     updaterCheck: (): Promise<{ success: boolean; version?: string; error?: string }> =>

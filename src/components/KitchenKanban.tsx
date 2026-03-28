@@ -140,6 +140,13 @@ export const KitchenKanban: React.FC<KitchenKanbanProps> = ({
 }) => {
     const [stationFilter, setStationFilter] = useState<string | null>(null);
     const [isFullscreen, setIsFullscreen] = useState(false);
+    const [alwaysOnTop, setAlwaysOnTop] = useState(false);
+
+    const toggleAlwaysOnTop = useCallback(() => {
+        const next = !alwaysOnTop;
+        setAlwaysOnTop(next);
+        window.electronAPI?.setAlwaysOnTop?.(next);
+    }, [alwaysOnTop]);
 
     // Extract unique category names from all order items for station filter
     const allCategories = useMemo(() => {
@@ -240,6 +247,13 @@ export const KitchenKanban: React.FC<KitchenKanbanProps> = ({
                     ))}
                     <div className="kanban__station-spacer" />
                     <button
+                        className={`kanban__station-btn ${alwaysOnTop ? 'kanban__station-btn--active' : ''}`}
+                        onClick={toggleAlwaysOnTop}
+                        title={alwaysOnTop ? 'Desactivar siempre visible' : 'Siempre visible'}
+                    >
+                        📌
+                    </button>
+                    <button
                         className="kanban__station-btn kanban__station-btn--fs"
                         onClick={toggleFullscreen}
                         title={isFullscreen ? 'Salir de pantalla completa (F11)' : 'Pantalla completa (F11)'}
@@ -253,6 +267,13 @@ export const KitchenKanban: React.FC<KitchenKanbanProps> = ({
             {allCategories.length <= 1 && (
                 <div className="kanban__station-bar kanban__station-bar--minimal">
                     <div className="kanban__station-spacer" />
+                    <button
+                        className={`kanban__station-btn ${alwaysOnTop ? 'kanban__station-btn--active' : ''}`}
+                        onClick={toggleAlwaysOnTop}
+                        title={alwaysOnTop ? 'Desactivar siempre visible' : 'Siempre visible'}
+                    >
+                        📌
+                    </button>
                     <button
                         className="kanban__station-btn kanban__station-btn--fs"
                         onClick={toggleFullscreen}

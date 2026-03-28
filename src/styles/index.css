@@ -4744,3 +4744,72 @@ body::before {
   0% { transform: scale(0.8); opacity: 0; }
   100% { transform: scale(1); opacity: 1; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   COMPACT MODE — for small screens (1024x768 and below)
+   Toggle with body.compact class
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+body.compact .status-bar {
+  padding: 4px 12px;
+}
+
+body.compact .status-bar__title {
+  font-size: 0.85rem;
+}
+
+body.compact .status-bar__clock {
+  font-size: 0.85rem;
+}
+
+body.compact .view-nav__item {
+  padding: 6px 12px;
+  font-size: 0.75rem;
+}
+
+body.compact .pos__catalog-grid {
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 6px;
+}
+
+body.compact .pos__product-card {
+  padding: 8px;
+}
+
+body.compact .pos__product-name {
+  font-size: 0.75rem;
+}
+
+body.compact .pos__product-price {
+  font-size: 0.8rem;
+}
+
+body.compact .pos__cart-item {
+  padding: 6px 8px;
+}
+
+body.compact .order-card {
+  padding: 10px;
+}
+
+body.compact .order-card__item {
+  font-size: 0.8rem;
+}
+
+body.compact .kanban__card {
+  padding: 10px;
+}
+
+body.compact .kanban__card-item {
+  font-size: 0.85rem;
+}
+
+/* Auto-enable compact for small viewports */
+@media (max-height: 800px) {
+  .status-bar { padding: 4px 12px; }
+  .status-bar__title { font-size: 0.85rem; }
+  .view-nav__item { padding: 6px 12px; font-size: 0.75rem; }
+  .pos__catalog-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; }
+  .order-card { padding: 10px; }
+  .kanban__card { padding: 10px; }
+}

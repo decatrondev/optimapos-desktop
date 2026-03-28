@@ -88,7 +88,7 @@ export const OrderCard: React.FC<OrderCardProps> = ({ order, currencySymbol, sto
                         <div className="order-card__item-main">
                             <span className="order-card__item-qty">{item.quantity}x</span>
                             <span className="order-card__item-name">{getItemName(item, { comboEmoji: true })}</span>
-                            <span className="order-card__item-price">{formatPrice(item.totalPrice, currencySymbol)}</span>
+                            {userRole !== 'KITCHEN' && <span className="order-card__item-price">{formatPrice(item.totalPrice, currencySymbol)}</span>}
                         </div>
                         {item.addons.length > 0 && (
                             <div className="order-card__addons">
@@ -114,10 +114,12 @@ export const OrderCard: React.FC<OrderCardProps> = ({ order, currencySymbol, sto
 
             {/* Footer */}
             <div className="order-card__footer">
-                <div className="order-card__total">
-                    <span>Total</span>
-                    <span className="order-card__total-value">{formatPrice(order.total, currencySymbol)}</span>
-                </div>
+                {userRole !== 'KITCHEN' && (
+                    <div className="order-card__total">
+                        <span>Total</span>
+                        <span className="order-card__total-value">{formatPrice(order.total, currencySymbol)}</span>
+                    </div>
+                )}
                 <div className="order-card__actions">
                     {onPrint && (
                         <button className="btn btn--print" onClick={() => onPrint(order)}>
