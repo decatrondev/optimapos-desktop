@@ -255,11 +255,26 @@ export interface DiscoveredPrinter {
     hostname?: string;
 }
 
+let scanAbortController: AbortController | null = null;
+
+export function cancelNetworkScan(): void {
+    if (scanAbortController) {
+        scanAbortController.abort();
+        scanAbortController = null;
+        log.info('[Scanner] Scan cancelled by user');
+    }
+}
+
 export async function scanNetworkPrinters(
     port = 9100,
     timeout = 300,
     onProgress?: (current: number, total: number) => void
 ): Promise<DiscoveredPrinter[]> {
+    // Cancel any existing scan
+    cancelNetworkScan();
+    scanAbortController = new AbortController();
+    const signal = scanAbortController.signal;
+
     const subnet = getLocalSubnet();
     if (!subnet) {
         log.warn('[Scanner] Could not determine local subnet');
@@ -273,12 +288,14 @@ export async function scanNetworkPrinters(
     // Scan in batches of 20 for performance
     const batchSize = 20;
     for (let start = 1; start <= 254; start += batchSize) {
+        if (signal.aborted) break;
+
         const batch: Promise<void>[] = [];
         for (let i = start; i < start + batchSize && i <= 254; i++) {
             const ip = `${subnet}.${i}`;
             batch.push(
                 scanPort(ip, port, timeout).then((open) => {
-                    if (open) {
+                    if (open && !signal.aborted) {
                         log.info(`[Scanner] Found printer at ${ip}:${port}`);
                         found.push({ ip, port });
                     }
@@ -286,12 +303,13 @@ export async function scanNetworkPrinters(
             );
         }
         await Promise.all(batch);
-        if (onProgress) {
+        if (onProgress && !signal.aborted) {
             onProgress(Math.min(start + batchSize - 1, 254), total);
         }
     }
 
-    log.info(`[Scanner] Scan complete. Found ${found.length} printer(s)`);
+    scanAbortController = null;
+    log.info(`[Scanner] Scan ${signal.aborted ? 'cancelled' : 'complete'}. Found ${found.length} printer(s)`);
     return found;
 }
 

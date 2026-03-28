@@ -269,29 +269,11 @@ export const PrinterSetup: React.FC<PrinterSetupProps> = ({ token, storeName, lo
 
                     {/* ── Action Buttons for Selected Printer ── */}
                     {selectedPrinter && api && (
-                        <div style={{ display: 'flex', gap: '8px', marginTop: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
-                            <button
-                                onClick={() => testConnection(selectedPrinter)}
-                                disabled={printerStatuses[selectedPrinter.id]?.connection === 'testing'}
-                                style={{
-                                    padding: '8px 14px', fontSize: '0.8rem', borderRadius: 'var(--radius-sm)',
-                                    background: 'var(--bg-elevated)', border: '1px solid var(--border-card)',
-                                    color: 'var(--text-primary)', cursor: 'pointer', fontFamily: 'var(--font-primary)',
-                                    transition: 'all 0.2s',
-                                }}
-                            >
+                        <div className="printer-setup__actions">
+                            <button className="printer-setup__btn" onClick={() => testConnection(selectedPrinter)} disabled={printerStatuses[selectedPrinter.id]?.connection === 'testing'}>
                                 {printerStatuses[selectedPrinter.id]?.connection === 'testing' ? '⏳ Probando...' : '🔗 Probar Conexion'}
                             </button>
-                            <button
-                                onClick={() => testPrint(selectedPrinter)}
-                                disabled={printerStatuses[selectedPrinter.id]?.print === 'testing'}
-                                style={{
-                                    padding: '8px 14px', fontSize: '0.8rem', borderRadius: 'var(--radius-sm)',
-                                    background: 'var(--bg-elevated)', border: '1px solid var(--border-card)',
-                                    color: 'var(--text-primary)', cursor: 'pointer', fontFamily: 'var(--font-primary)',
-                                    transition: 'all 0.2s',
-                                }}
-                            >
+                            <button className="printer-setup__btn" onClick={() => testPrint(selectedPrinter)} disabled={printerStatuses[selectedPrinter.id]?.print === 'testing'}>
                                 {printerStatuses[selectedPrinter.id]?.print === 'testing' ? '⏳ Imprimiendo...' : '🧾 Imprimir Test'}
                             </button>
                         </div>
@@ -299,154 +281,71 @@ export const PrinterSetup: React.FC<PrinterSetupProps> = ({ token, storeName, lo
 
                     {/* ── Test Result Feedback ── */}
                     {selectedPrinter && printerStatuses[selectedPrinter.id]?.connection === 'success' && (
-                        <div style={{
-                            marginTop: '8px', padding: '8px 12px', fontSize: '0.8rem',
-                            background: 'var(--accent-success-glow)', color: 'var(--accent-success)',
-                            borderRadius: 'var(--radius-sm)', border: '1px solid rgba(34, 197, 94, 0.2)',
-                            textAlign: 'center',
-                        }}>
+                        <div className="printer-setup__feedback printer-setup__feedback--success">
                             Conexion exitosa con <strong>{selectedPrinter.name}</strong>
                         </div>
                     )}
                     {selectedPrinter && printerStatuses[selectedPrinter.id]?.connection === 'error' && (
-                        <div style={{
-                            marginTop: '8px', padding: '8px 12px', fontSize: '0.8rem',
-                            background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444',
-                            borderRadius: 'var(--radius-sm)', border: '1px solid rgba(239, 68, 68, 0.2)',
-                            textAlign: 'center',
-                        }}>
+                        <div className="printer-setup__feedback printer-setup__feedback--error">
                             Error: {printerStatuses[selectedPrinter.id]?.connectionError || 'No se pudo conectar'}
                         </div>
                     )}
                     {selectedPrinter && printerStatuses[selectedPrinter.id]?.print === 'success' && (
-                        <div style={{
-                            marginTop: '8px', padding: '8px 12px', fontSize: '0.8rem',
-                            background: 'var(--accent-success-glow)', color: 'var(--accent-success)',
-                            borderRadius: 'var(--radius-sm)', border: '1px solid rgba(34, 197, 94, 0.2)',
-                            textAlign: 'center',
-                        }}>
+                        <div className="printer-setup__feedback printer-setup__feedback--success">
                             Ticket de prueba enviado correctamente
                         </div>
                     )}
                     {selectedPrinter && printerStatuses[selectedPrinter.id]?.print === 'error' && (
-                        <div style={{
-                            marginTop: '8px', padding: '8px 12px', fontSize: '0.8rem',
-                            background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444',
-                            borderRadius: 'var(--radius-sm)', border: '1px solid rgba(239, 68, 68, 0.2)',
-                            textAlign: 'center',
-                        }}>
+                        <div className="printer-setup__feedback printer-setup__feedback--error">
                             Error al imprimir: {printerStatuses[selectedPrinter.id]?.printError || 'Fallo desconocido'}
                         </div>
                     )}
 
                     {/* ── Confirm Button ── */}
                     {printers.length > 0 && (
-                        <button
-                            className="login-card__submit"
-                            onClick={handleConfirm}
-                            disabled={!selectedId || saving}
-                            style={{ marginTop: '16px' }}
-                        >
-                            {saving ? (
-                                <>
-                                    <span className="login-card__spinner" />
-                                    Guardando...
-                                </>
-                            ) : (
-                                'Confirmar Impresora'
-                            )}
+                        <button className="login-card__submit" onClick={handleConfirm} disabled={!selectedId || saving} style={{ marginTop: '16px' }}>
+                            {saving ? (<><span className="login-card__spinner" />Guardando...</>) : 'Confirmar Impresora'}
                         </button>
                     )}
 
                     {/* ── Divider ── */}
-                    <div style={{
-                        margin: '20px 0 12px', borderTop: '1px solid var(--border-subtle)',
-                        position: 'relative', textAlign: 'center',
-                    }}>
-                        <span style={{
-                            position: 'relative', top: '-10px', background: 'var(--bg-card)',
-                            padding: '0 12px', fontSize: '0.75rem', color: 'var(--text-muted)',
-                        }}>
-                            Herramientas de diagnostico
-                        </span>
+                    <div className="printer-setup__divider">
+                        <span className="printer-setup__divider-text">Herramientas de diagnostico</span>
                     </div>
 
                     {/* ── Discovery Tools ── */}
-                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
-                        <button
-                            onClick={handleScanNetwork}
-                            disabled={scanning}
-                            style={{
-                                padding: '10px 16px', fontSize: '0.8rem', borderRadius: 'var(--radius-sm)',
-                                background: 'var(--bg-primary)', border: '1px solid var(--border-card)',
-                                color: 'var(--text-secondary)', cursor: scanning ? 'wait' : 'pointer',
-                                fontFamily: 'var(--font-primary)', transition: 'all 0.2s',
-                            }}
-                        >
+                    <div className="printer-setup__actions">
+                        <button className="printer-setup__btn printer-setup__btn--tool" onClick={handleScanNetwork} disabled={scanning}>
                             {scanning ? '📡 Escaneando...' : '📡 Escanear Red'}
                         </button>
-                        <button
-                            onClick={handleListSystem}
-                            disabled={loadingSystem}
-                            style={{
-                                padding: '10px 16px', fontSize: '0.8rem', borderRadius: 'var(--radius-sm)',
-                                background: 'var(--bg-primary)', border: '1px solid var(--border-card)',
-                                color: 'var(--text-secondary)', cursor: loadingSystem ? 'wait' : 'pointer',
-                                fontFamily: 'var(--font-primary)', transition: 'all 0.2s',
-                            }}
-                        >
+                        <button className="printer-setup__btn printer-setup__btn--tool" onClick={handleListSystem} disabled={loadingSystem}>
                             {loadingSystem ? '🔌 Buscando...' : '🔌 Listar USB'}
                         </button>
                     </div>
 
                     {/* ── Scan Progress ── */}
                     {scanning && scanProgress && (
-                        <div style={{ marginTop: '10px' }}>
-                            <div style={{
-                                width: '100%', height: '4px', background: 'var(--bg-primary)',
-                                borderRadius: '2px', overflow: 'hidden',
-                            }}>
-                                <div style={{
-                                    width: `${(scanProgress.current / scanProgress.total) * 100}%`,
-                                    height: '100%', background: 'var(--accent-primary)',
-                                    borderRadius: '2px', transition: 'width 0.3s',
-                                }} />
+                        <div className="printer-setup__progress-bar">
+                            <div className="printer-setup__progress-track">
+                                <div className="printer-setup__progress-fill" style={{ width: `${(scanProgress.current / scanProgress.total) * 100}%` }} />
                             </div>
-                            <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '4px' }}>
-                                {scanProgress.current}/{scanProgress.total} IPs
-                            </p>
+                            <p className="printer-setup__progress-text">{scanProgress.current}/{scanProgress.total} IPs</p>
                         </div>
                     )}
 
                     {/* ── Network Scan Results ── */}
                     {scanResults !== null && !scanning && (
-                        <div style={{
-                            marginTop: '10px', padding: '10px 12px',
-                            background: 'var(--bg-primary)', borderRadius: 'var(--radius-sm)',
-                            border: '1px solid var(--border-card)',
-                        }}>
-                            <p style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                                📡 Impresoras de red encontradas: {scanResults.length}
-                            </p>
+                        <div className="printer-setup__results">
+                            <p className="printer-setup__results-title">📡 Impresoras de red encontradas: {scanResults.length}</p>
                             {scanResults.length === 0 && (
-                                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                    No se encontraron impresoras en la red local (puerto 9100).
-                                </p>
+                                <p className="printer-setup__results-empty">No se encontraron impresoras en la red local (puerto 9100).</p>
                             )}
                             {scanResults.map((r, i) => (
-                                <div key={i} style={{
-                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                    padding: '6px 8px', background: 'var(--bg-secondary)', borderRadius: '6px',
-                                    marginTop: '4px',
-                                }}>
-                                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--accent-success)' }}>
-                                        {r.ip}:{r.port}
+                                <div key={i} className="printer-setup__result-item">
+                                    <span className="printer-setup__result-ip">{r.ip}:{r.port}</span>
+                                    <span className={`printer-setup__result-status ${!printers.some(p => p.type === 'NETWORK' && p.address === r.ip) ? 'printer-setup__result-status--new' : ''}`}>
+                                        {printers.some(p => p.type === 'NETWORK' && p.address === r.ip) ? 'Ya configurada' : 'Nueva'}
                                     </span>
-                                    {printers.some(p => p.type === 'NETWORK' && p.address === r.ip) ? (
-                                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Ya configurada</span>
-                                    ) : (
-                                        <span style={{ fontSize: '0.7rem', color: 'var(--accent-primary)' }}>Nueva</span>
-                                    )}
                                 </div>
                             ))}
                         </div>
@@ -454,48 +353,20 @@ export const PrinterSetup: React.FC<PrinterSetupProps> = ({ token, storeName, lo
 
                     {/* ── System Printers Results ── */}
                     {systemPrinters !== null && (
-                        <div style={{
-                            marginTop: '10px', padding: '10px 12px',
-                            background: 'var(--bg-primary)', borderRadius: 'var(--radius-sm)',
-                            border: '1px solid var(--border-card)',
-                        }}>
-                            <p style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                                🔌 Impresoras del sistema: {systemPrinters.length}
-                            </p>
+                        <div className="printer-setup__results">
+                            <p className="printer-setup__results-title">🔌 Impresoras del sistema: {systemPrinters.length}</p>
                             {systemPrinters.length === 0 && (
-                                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                                    No se encontraron impresoras instaladas.
-                                </p>
+                                <p className="printer-setup__results-empty">No se encontraron impresoras instaladas.</p>
                             )}
                             {systemPrinters.map((sp, i) => (
-                                <div key={i} style={{
-                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                    padding: '6px 8px', background: 'var(--bg-secondary)', borderRadius: '6px',
-                                    marginTop: '4px',
-                                }}>
-                                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--text-primary)' }}>
-                                        {sp.name}
-                                    </span>
-                                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                                        {sp.portName && (
-                                            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                                                {sp.portName}
-                                            </span>
-                                        )}
-                                        {sp.isDefault && (
-                                            <span style={{
-                                                fontSize: '0.6rem', color: 'var(--accent-info)',
-                                                background: 'rgba(59, 130, 246, 0.1)', padding: '1px 6px',
-                                                borderRadius: '4px',
-                                            }}>
-                                                Default
-                                            </span>
-                                        )}
-                                        {printers.some(p => p.type === 'USB' && p.address === sp.name) ? (
-                                            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>Configurada</span>
-                                        ) : (
-                                            <span style={{ fontSize: '0.65rem', color: 'var(--accent-primary)' }}>Nueva</span>
-                                        )}
+                                <div key={i} className="printer-setup__result-item">
+                                    <span className="printer-setup__result-name">{sp.name}</span>
+                                    <div className="printer-setup__result-meta">
+                                        {sp.portName && <span className="printer-setup__result-port">{sp.portName}</span>}
+                                        {sp.isDefault && <span className="printer-setup__result-badge">Default</span>}
+                                        <span className={`printer-setup__result-status ${!printers.some(p => p.type === 'USB' && p.address === sp.name) ? 'printer-setup__result-status--new' : ''}`}>
+                                            {printers.some(p => p.type === 'USB' && p.address === sp.name) ? 'Configurada' : 'Nueva'}
+                                        </span>
                                     </div>
                                 </div>
                             ))}
@@ -503,31 +374,9 @@ export const PrinterSetup: React.FC<PrinterSetupProps> = ({ token, storeName, lo
                     )}
 
                     {/* ── Skip / Logout ── */}
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginTop: '16px' }}>
-                        {onSkip && (
-                            <button
-                                onClick={onSkip}
-                                style={{
-                                    background: 'none', border: 'none', color: 'var(--text-muted)',
-                                    cursor: 'pointer', fontSize: '0.8rem', textDecoration: 'underline',
-                                    fontFamily: 'var(--font-primary)',
-                                }}
-                            >
-                                Continuar sin impresora
-                            </button>
-                        )}
-                        {onLogout && (
-                            <button
-                                onClick={onLogout}
-                                style={{
-                                    background: 'none', border: 'none', color: 'var(--text-muted)',
-                                    cursor: 'pointer', fontSize: '0.8rem', textDecoration: 'underline',
-                                    fontFamily: 'var(--font-primary)',
-                                }}
-                            >
-                                Cerrar sesion
-                            </button>
-                        )}
+                    <div className="printer-setup__footer">
+                        {onSkip && <button className="printer-setup__btn--link" onClick={onSkip}>Continuar sin impresora</button>}
+                        {onLogout && <button className="printer-setup__btn--link" onClick={onLogout}>Cerrar sesion</button>}
                     </div>
                 </div>
             </div>

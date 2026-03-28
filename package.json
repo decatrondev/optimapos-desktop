@@ -24,7 +24,9 @@
     "postinstall": "npx @electron/rebuild -f -w better-sqlite3",
     "lint": "eslint src/ electron/",
     "format": "prettier --write \"src/**/*.{ts,tsx}\" \"electron/**/*.ts\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"electron/**/*.ts\""
+    "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"electron/**/*.ts\"",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "better-sqlite3": "^12.8.0",
@@ -51,7 +53,8 @@
     "prettier": "^3.8.1",
     "typescript": "^5.6.3",
     "typescript-eslint": "^8.57.2",
-    "vite": "^6.0.5"
+    "vite": "^6.0.5",
+    "vitest": "^4.1.2"
   },
   "build": {
     "appId": "net.decatron.optimapos",

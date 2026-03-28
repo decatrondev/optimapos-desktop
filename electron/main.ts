@@ -8,6 +8,7 @@ import {
     printViaTCP,
     printViaUSB,
     scanNetworkPrinters,
+    cancelNetworkScan,
     getSystemPrinters,
     buildTestTicket,
     textToEscPos,
@@ -526,6 +527,11 @@ ipcMain.handle('printer-scan-network', async () => {
         90000,
         [],
     );
+});
+
+// Cancel network scan
+ipcMain.handle('printer-scan-cancel', async () => {
+    cancelNetworkScan();
 });
 
 // List system printers (USB/installed)
