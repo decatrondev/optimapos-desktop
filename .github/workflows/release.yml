@@ -33,10 +33,11 @@ jobs:
         if: matrix.platform == 'linux'
         run: sudo apt-get update && sudo apt-get install -y build-essential python3
 
+      - name: Remove lockfile for cross-platform deps
+        run: node -e "try{require('fs').unlinkSync('package-lock.json')}catch{}"
+
       - name: Install dependencies
-        run: |
-          rm -f package-lock.json
-          npm install
+        run: npm install
 
       - name: Build app
         run: npm run build
