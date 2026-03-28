@@ -73,7 +73,7 @@
     ],
     "publish": {
       "provider": "github",
-      "owner": "decagraff",
+      "owner": "decatrondev",
       "repo": "optimapos-desktop",
       "releaseType": "release"
     },
@@ -104,6 +104,7 @@
       "deleteAppDataOnUninstall": false,
       "include": "build/installer.nsh"
     },
+    "afterSign": "scripts/notarize.js",
     "mac": {
       "target": [
         {
@@ -115,7 +116,11 @@
         }
       ],
       "icon": "build/icon.png",
-      "category": "public.app-category.business"
+      "category": "public.app-category.business",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
     },
     "linux": {
       "target": [

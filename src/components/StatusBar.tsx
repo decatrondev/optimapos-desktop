@@ -18,6 +18,8 @@ interface StatusBarProps {
     offlineStatus?: ConnectionStatus;
     pendingOrders?: number;
     lastSync?: string | null;
+    onPrintQueue?: () => void;
+    printErrorCount?: number;
 }
 
 function getRoleBadge(role: string): { label: string; className: string } {
@@ -33,7 +35,7 @@ function getRoleBadge(role: string): { label: string; className: string } {
 
 export const StatusBar: React.FC<StatusBarProps> = ({
     storeName, locationName, isConnected, orderCount, user, onLogout, onSettings, onChangeServer, onChangeLocation, canChangeLocation,
-    onRefresh, offlineStatus, pendingOrders, lastSync,
+    onRefresh, offlineStatus, pendingOrders, lastSync, onPrintQueue, printErrorCount,
 }) => {
     const time = useClock();
     const roleBadge = user ? getRoleBadge(user.role) : null;
@@ -100,6 +102,19 @@ export const StatusBar: React.FC<StatusBarProps> = ({
                         {onSettings && (
                             <button className="btn btn--logout" onClick={onSettings} title="Cambiar impresora">
                                 🖨️
+                            </button>
+                        )}
+                        {onPrintQueue && (
+                            <button className="btn btn--logout" onClick={onPrintQueue} title="Cola de impresion" style={{ position: 'relative' }}>
+                                📋
+                                {(printErrorCount ?? 0) > 0 && (
+                                    <span style={{
+                                        position: 'absolute', top: '-2px', right: '-2px',
+                                        background: '#ef4444', color: '#fff', fontSize: '0.55rem',
+                                        borderRadius: '50%', width: '14px', height: '14px',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    }}>{printErrorCount}</span>
+                                )}
                             </button>
                         )}
                         {onChangeServer && (

@@ -85,6 +85,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
         return () => ipcRenderer.removeListener('offline-status', handler);
     },
 
+    // Multi-monitor
+    openKitchenWindow: (): Promise<{ success: boolean; display?: string; alreadyOpen?: boolean }> =>
+        ipcRenderer.invoke('open-kitchen-window'),
+    closeKitchenWindow: (): Promise<void> => ipcRenderer.invoke('close-kitchen-window'),
+    getDisplayCount: (): Promise<number> => ipcRenderer.invoke('get-display-count'),
+
     // Image cache
     imageCacheGet: (url: string): Promise<string | null> => ipcRenderer.invoke('image-cache-get', url),
     imageCacheStore: (url: string): Promise<string | null> => ipcRenderer.invoke('image-cache-store', url),

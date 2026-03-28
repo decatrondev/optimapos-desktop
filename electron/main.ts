@@ -85,8 +85,11 @@ function ensureFirewallRule(): void {
     }
 }
 
+import { screen as electronScreen } from 'electron';
+
 const isDev = process.env.NODE_ENV === 'development';
 let mainWindow: BrowserWindow | null = null;
+let kitchenWindow: BrowserWindow | null = null;
 
 // ─── Logging ────────────────────────────────────────────────────────────────
 
@@ -378,6 +381,9 @@ function sendToRenderer(channel: string, data: any): void {
     if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send(channel, data);
     }
+    if (kitchenWindow && !kitchenWindow.isDestroyed()) {
+        kitchenWindow.webContents.send(channel, data);
+    }
 }
 
 // ─── IPC Handlers ────────────────────────────────────────────────────────────
@@ -528,6 +534,63 @@ ipcMain.handle('printer-scan-network', async () => {
         90000,
         [],
     );
+});
+
+// ─── Multi-Monitor: Kitchen Window ──────────────────────────────────────────
+
+ipcMain.handle('open-kitchen-window', async () => {
+    if (kitchenWindow && !kitchenWindow.isDestroyed()) {
+        kitchenWindow.focus();
+        return { success: true, alreadyOpen: true };
+    }
+
+    const displays = electronScreen.getAllDisplays();
+    const secondDisplay = displays.find(d => d.id !== electronScreen.getPrimaryDisplay().id);
+    const bounds = secondDisplay ? secondDisplay.bounds : { x: 100, y: 100, width: 1280, height: 800 };
+
+    const config = readConfig();
+    kitchenWindow = new BrowserWindow({
+        x: bounds.x,
+        y: bounds.y,
+        width: bounds.width,
+        height: bounds.height,
+        title: `OptimaPOS Kitchen - ${config.tenantName || ''}`,
+        autoHideMenuBar: true,
+        backgroundColor: '#0a0c10',
+        webPreferences: {
+            preload: path.join(__dirname, 'preload.js'),
+            contextIsolation: true,
+            nodeIntegration: false,
+        },
+    });
+
+    if (isDev) {
+        kitchenWindow.loadURL('http://localhost:5173/#/kitchen');
+    } else {
+        kitchenWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'), { hash: '/kitchen' });
+    }
+
+    if (secondDisplay) {
+        kitchenWindow.setFullScreen(true);
+    }
+
+    kitchenWindow.on('closed', () => {
+        kitchenWindow = null;
+    });
+
+    log.info(`[Window] Kitchen window opened on ${secondDisplay ? 'secondary' : 'primary'} display`);
+    return { success: true, display: secondDisplay ? 'secondary' : 'primary' };
+});
+
+ipcMain.handle('close-kitchen-window', async () => {
+    if (kitchenWindow && !kitchenWindow.isDestroyed()) {
+        kitchenWindow.close();
+        kitchenWindow = null;
+    }
+});
+
+ipcMain.handle('get-display-count', async () => {
+    return electronScreen.getAllDisplays().length;
 });
 
 // Image cache

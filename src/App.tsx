@@ -14,6 +14,7 @@ import { AlertOverlay } from './components/AlertOverlay';
 import { LoginScreen } from './components/LoginScreen';
 import { PrinterSetup } from './components/PrinterSetup';
 import { TicketPreview, PrintJobPreview } from './components/TicketPreview';
+import { PrintQueue, PrintHistoryEntry } from './components/PrintQueue';
 import { ServerSetup } from './components/ServerSetup';
 import { LocationPicker } from './components/LocationPicker';
 import { Order, Location } from './types/order';
@@ -88,6 +89,12 @@ const OperationalView: React.FC<{
     const [ticketPreview, setTicketPreview] = useState<{ order: Order; template: TicketTemplate } | null>(null);
     const [activePrintJob, setActivePrintJob] = useState<PrintJob | null>(null);
     const [printError, setPrintError] = useState<string | null>(null);
+    const [printHistory, setPrintHistory] = useState<PrintHistoryEntry[]>([]);
+    const [showPrintQueue, setShowPrintQueue] = useState(false);
+
+    const addToHistory = useCallback((job: PrintJob, status: 'printed' | 'error', error?: string) => {
+        setPrintHistory(prev => [{ job, status, error, timestamp: Date.now() }, ...prev].slice(0, 50));
+    }, []);
 
     // Desktop socket auth (API key based)
     useEffect(() => {
@@ -162,8 +169,11 @@ const OperationalView: React.FC<{
             if (job.rule.autoPrint) {
                 console.log(`[AutoPrint] Executing: ${job.jobId} | ${job.event} → ${job.printer.name}`);
                 executePrintJob(job).then(result => {
-                    if (!result.success) {
+                    if (result.success) {
+                        addToHistory(job, 'printed');
+                    } else {
                         console.error(`[AutoPrint] Failed: ${result.error}`);
+                        addToHistory(job, 'error', result.error);
                         setPrintError(`Error imprimiendo: ${result.error || 'Error desconocido'}`);
                         setTimeout(() => setPrintError(null), 8000);
                     }
@@ -389,6 +399,8 @@ const OperationalView: React.FC<{
                 offlineStatus={offline.status}
                 pendingOrders={offline.pendingCount}
                 lastSync={offline.lastSync}
+                onPrintQueue={() => setShowPrintQueue(true)}
+                printErrorCount={printHistory.filter(e => e.status === 'error').length}
             />
 
             {user && (
@@ -424,6 +436,15 @@ const OperationalView: React.FC<{
                 </div>
             )}
 
+            {showPrintQueue && (
+                <PrintQueue
+                    history={printHistory}
+                    pendingCount={printJobs.length}
+                    onClose={() => setShowPrintQueue(false)}
+                    onReprint={(entry) => addToHistory(entry.job, 'printed')}
+                />
+            )}
+
             {ticketPreview && (
                 <TicketPreview
                     template={ticketPreview.template}
@@ -447,6 +468,7 @@ const OperationalView: React.FC<{
                     onPrint={async () => {
                         console.log(`[Print] Manual print for job: ${activePrintJob.jobId}`);
                         const result = await executePrintJob(activePrintJob);
+                        addToHistory(activePrintJob, result.success ? 'printed' : 'error', result.error);
                         if (!result.success) {
                             console.error(`[Print] Manual print failed: ${result.error}`);
                         }
