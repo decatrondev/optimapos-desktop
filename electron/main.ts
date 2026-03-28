@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, safeStorage } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as dotenv from 'dotenv';
@@ -112,6 +112,24 @@ interface AppConfig {
     cachedLocations: string | null;   // JSON-stringified locations for offline
 }
 
+// Fields that should be encrypted with safeStorage
+const SENSITIVE_KEYS: (keyof AppConfig)[] = ['token', 'apiKey', 'cachedUser', 'cachedPermissions', 'cachedLocations'];
+
+function encryptValue(value: string): string {
+    if (!safeStorage.isEncryptionAvailable()) return value;
+    return safeStorage.encryptString(value).toString('base64');
+}
+
+function decryptValue(value: string): string {
+    if (!safeStorage.isEncryptionAvailable()) return value;
+    try {
+        return safeStorage.decryptString(Buffer.from(value, 'base64'));
+    } catch {
+        // Value was stored before encryption was enabled — return as-is
+        return value;
+    }
+}
+
 const DEFAULT_CONFIG: AppConfig = {
     serverUrl: '',
     tenantSlug: '',
@@ -131,10 +149,18 @@ function readConfig(): AppConfig {
     try {
         if (fs.existsSync(CONFIG_FILE)) {
             const data = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8'));
-            return { ...DEFAULT_CONFIG, ...data };
+            const merged = { ...DEFAULT_CONFIG, ...data };
+            // Decrypt sensitive fields
+            for (const key of SENSITIVE_KEYS) {
+                const val = merged[key];
+                if (typeof val === 'string' && val.length > 0) {
+                    (merged as any)[key] = decryptValue(val);
+                }
+            }
+            return merged;
         }
-    } catch {
-        // corrupted config, reset
+    } catch (e: any) {
+        log.warn('[Config] Read/parse error, resetting to defaults:', e.message);
     }
     return { ...DEFAULT_CONFIG };
 }
@@ -142,10 +168,18 @@ function readConfig(): AppConfig {
 function writeConfig(updates: Partial<AppConfig>): AppConfig {
     const current = readConfig();
     const updated = { ...current, ...updates };
+    // Encrypt sensitive fields before writing
+    const toWrite = { ...updated };
+    for (const key of SENSITIVE_KEYS) {
+        const val = toWrite[key];
+        if (typeof val === 'string' && val.length > 0) {
+            (toWrite as any)[key] = encryptValue(val);
+        }
+    }
     try {
-        fs.writeFileSync(CONFIG_FILE, JSON.stringify(updated, null, 2), 'utf-8');
-    } catch (e) {
-        console.error('[Config] Write error:', e);
+        fs.writeFileSync(CONFIG_FILE, JSON.stringify(toWrite, null, 2), 'utf-8');
+    } catch (e: any) {
+        log.error('[Config] Write error:', e.message);
     }
     return updated;
 }
@@ -157,6 +191,22 @@ function createWindow(): void {
     const titleParts = ['OptimaPOS Terminal'];
     if (config.tenantName) titleParts.push(config.tenantName);
     if (config.locationName) titleParts.push(config.locationName);
+
+    // Content-Security-Policy — restrict what the renderer can load
+    const serverOrigin = config.serverUrl ? new URL(config.serverUrl).origin : '';
+    const wsOrigin = serverOrigin.replace(/^https?:/, 'wss:');
+    const connectSrc = ['\'self\'', serverOrigin, wsOrigin, 'https://*.decatron.net', 'wss://*.decatron.net'].filter(Boolean).join(' ');
+
+    require('electron').session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+        callback({
+            responseHeaders: {
+                ...details.responseHeaders,
+                'Content-Security-Policy': [
+                    `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.decatron.net ${serverOrigin}; connect-src ${connectSrc}; font-src 'self' data:; object-src 'none'; base-uri 'self'`,
+                ],
+            },
+        });
+    });
 
     mainWindow = new BrowserWindow({
         width: 1280,
@@ -391,52 +441,91 @@ ipcMain.handle('print-ticket', async (_event, ticketText: string, fileName: stri
     }
 });
 
+// ─── IPC Timeout Helper ──────────────────────────────────────────────────────
+
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+    return Promise.race([
+        promise,
+        new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
+    ]);
+}
+
 // ─── Printer IPC ─────────────────────────────────────────────────────────────
+
+const IP_REGEX = /^(\d{1,3}\.){3}\d{1,3}$/;
+const MAX_PRINT_DATA_SIZE = 1024 * 512; // 512KB max
+
+function validateIP(ip: unknown): ip is string {
+    return typeof ip === 'string' && IP_REGEX.test(ip) && ip.split('.').every(n => parseInt(n) <= 255);
+}
+
+function validatePort(port: unknown): port is number {
+    return typeof port === 'number' && Number.isInteger(port) && port >= 1 && port <= 65535;
+}
+
+function validatePrintData(data: unknown): data is number[] {
+    return Array.isArray(data) && data.length > 0 && data.length <= MAX_PRINT_DATA_SIZE;
+}
 
 // Print raw ESC/POS data via TCP (network)
 ipcMain.handle('printer-print-tcp', async (_event, ip: string, port: number, data: number[]) => {
+    if (!validateIP(ip) || !validatePort(port)) return { success: false, error: 'IP o puerto invalido' };
+    if (!validatePrintData(data)) return { success: false, error: 'Datos de impresion invalidos o muy grandes' };
     return printViaTCP(ip, port, Buffer.from(data));
 });
 
 // Print raw ESC/POS data via USB (system driver)
 ipcMain.handle('printer-print-usb', async (_event, printerName: string, data: number[]) => {
+    if (typeof printerName !== 'string' || !printerName.trim()) return { success: false, error: 'Nombre de impresora invalido' };
+    if (!validatePrintData(data)) return { success: false, error: 'Datos de impresion invalidos o muy grandes' };
     return printViaUSB(printerName, Buffer.from(data));
 });
 
 // Print text via TCP (auto-converts to ESC/POS)
 ipcMain.handle('printer-print-text-tcp', async (_event, ip: string, port: number, text: string) => {
+    if (!validateIP(ip) || !validatePort(port)) return { success: false, error: 'IP o puerto invalido' };
+    if (typeof text !== 'string' || !text.trim()) return { success: false, error: 'Texto vacio' };
     const data = textToEscPos(text);
     return printViaTCP(ip, port, data);
 });
 
 // Print text via USB (auto-converts to ESC/POS)
 ipcMain.handle('printer-print-text-usb', async (_event, printerName: string, text: string) => {
+    if (typeof printerName !== 'string' || !printerName.trim()) return { success: false, error: 'Nombre de impresora invalido' };
+    if (typeof text !== 'string' || !text.trim()) return { success: false, error: 'Texto vacio' };
     const data = textToEscPos(text);
     return printViaUSB(printerName, data);
 });
 
 // Print test ticket via TCP
 ipcMain.handle('printer-test-tcp', async (_event, ip: string, port: number, storeName: string) => {
-    const data = buildTestTicket(storeName);
+    if (!validateIP(ip) || !validatePort(port)) return { success: false, error: 'IP o puerto invalido' };
+    const data = buildTestTicket(typeof storeName === 'string' ? storeName : 'OptimaPOS');
     return printViaTCP(ip, port, data);
 });
 
 // Print test ticket via USB
 ipcMain.handle('printer-test-usb', async (_event, printerName: string, storeName: string) => {
-    const data = buildTestTicket(storeName);
+    if (typeof printerName !== 'string' || !printerName.trim()) return { success: false, error: 'Nombre de impresora invalido' };
+    const data = buildTestTicket(typeof storeName === 'string' ? storeName : 'OptimaPOS');
     return printViaUSB(printerName, data);
 });
 
 // Test TCP connection (no print)
 ipcMain.handle('printer-test-connection', async (_event, ip: string, port: number) => {
+    if (!validateIP(ip) || !validatePort(port)) return { success: false, error: 'IP o puerto invalido' };
     return testTCPConnection(ip, port);
 });
 
-// Scan network for printers (port 9100)
+// Scan network for printers (port 9100) — 90s timeout
 ipcMain.handle('printer-scan-network', async () => {
-    return scanNetworkPrinters(9100, 300, (current, total) => {
-        sendToRenderer('printer-scan-progress', { current, total });
-    });
+    return withTimeout(
+        scanNetworkPrinters(9100, 300, (current, total) => {
+            sendToRenderer('printer-scan-progress', { current, total });
+        }),
+        90000,
+        [],
+    );
 });
 
 // List system printers (USB/installed)
@@ -453,12 +542,12 @@ ipcMain.handle('offline-check-connection', async (_event, serverUrl: string) => 
 
 ipcMain.handle('offline-sync-catalog', async (_event, serverUrl: string, token: string, locationId: number) => {
     if (!isDbReady()) return { success: false, error: 'SQLite not available' };
-    return syncCatalog({ serverUrl, token, locationId });
+    return withTimeout(syncCatalog({ serverUrl, token, locationId }), 30000, { success: false, error: 'Timeout sincronizando catalogo' });
 });
 
 ipcMain.handle('offline-sync-pending', async (_event, serverUrl: string, token: string, locationId: number) => {
     if (!isDbReady()) return { synced: 0, failed: 0 };
-    return syncPendingOrders({ serverUrl, token, locationId });
+    return withTimeout(syncPendingOrders({ serverUrl, token, locationId }), 30000, { synced: 0, failed: 0 });
 });
 
 ipcMain.handle('offline-has-catalog', async () => {
@@ -560,12 +649,14 @@ app.whenReady().then(async () => {
     // Ensure Windows firewall allows TCP 9100 for network printers
     ensureFirewallRule();
 
-    // Check for updates BEFORE showing the app
-    await checkForUpdateOnStartup();
-
-    // If we're still running (user skipped or no update), show the app
+    // Show the app immediately, then check for updates in background
     createWindow();
     setupBackgroundUpdater();
+
+    // Check for updates after window is visible (non-blocking)
+    checkForUpdateOnStartup().catch(err => {
+        log.error('[Updater] Startup check failed:', err);
+    });
 
     // Start sync scheduler — provides connection status to renderer
     startSyncScheduler(

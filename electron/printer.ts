@@ -97,16 +97,22 @@ async function resolveWindowsPrinterName(nameOrPort: string): Promise<string> {
 
 // ─── USB Printer (via system driver name) ───────────────────────────────────
 
-export function printViaUSB(
+export async function printViaUSB(
     printerName: string,
     data: Buffer
 ): Promise<{ success: boolean; error?: string }> {
-    return new Promise(async (resolve) => {
-        const platform = process.platform;
-        const tmpFile = require('path').join(os.tmpdir(), `optimapos-ticket-${Date.now()}.bin`);
+    const platform = process.platform;
+    const tmpFile = require('path').join(os.tmpdir(), `optimapos-ticket-${Date.now()}.bin`);
 
-        // Resolve port names (USB003) to driver names (80mm Series Printer)
-        const resolvedName = await resolveWindowsPrinterName(printerName);
+    // Resolve port names (USB003) to driver names (80mm Series Printer)
+    let resolvedName: string;
+    try {
+        resolvedName = await resolveWindowsPrinterName(printerName);
+    } catch (err: any) {
+        return { success: false, error: `Error resolviendo nombre de impresora: ${err.message}` };
+    }
+
+    return new Promise((resolve) => {
 
         // Write binary data to temp file
         try {

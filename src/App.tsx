@@ -154,13 +154,24 @@ const OperationalView: React.FC<{
         }
     }, [printJobs, clearPrintJob, activePrintJob]);
 
-    // Merge socket + initial orders — socket data takes priority (more recent)
+    // Merge socket + initial orders — socket data takes priority but preserves nested data
     const orderMap = new Map<number, Order>();
     for (const io of initialOrders) {
         orderMap.set(io.id, io);
     }
     for (const so of orders) {
-        orderMap.set(so.id, { ...(orderMap.get(so.id) || {}), ...so } as Order);
+        const existing = orderMap.get(so.id);
+        if (existing) {
+            // Preserve nested arrays/objects from initial if socket didn't send them
+            orderMap.set(so.id, {
+                ...existing,
+                ...so,
+                items: so.items ?? existing.items,
+                table: so.table ?? existing.table,
+            } as Order);
+        } else {
+            orderMap.set(so.id, so);
+        }
     }
     const mergedOrders = Array.from(orderMap.values());
 
@@ -441,6 +452,31 @@ export const App: React.FC = () => {
         });
     }, [logout, setAppConfig]);
 
+    // Auto-fix invalid location: clear if not in list, auto-select if only one
+    useEffect(() => {
+        if (!appConfig?.locationId || locations.length === 0) return;
+        const isAdmin = user?.role === 'ADMIN' || user?.role === 'MANAGER';
+        const isAllLocations = appConfig.locationId === -1;
+        const savedLocValid = isAllLocations
+            ? isAdmin
+            : locations.some(l => l.id === appConfig.locationId);
+        if (!savedLocValid) {
+            setAppConfig({ locationId: undefined as any, locationName: undefined as any });
+        }
+    }, [appConfig?.locationId, locations, user?.role, setAppConfig]);
+
+    useEffect(() => {
+        if (locations.length !== 1 || !appConfig || !isAuthenticated) return;
+        const isAdmin = user?.role === 'ADMIN' || user?.role === 'MANAGER';
+        const isAllLocations = appConfig.locationId === -1;
+        const savedLocValid = isAllLocations
+            ? isAdmin
+            : appConfig.locationId && locations.some(l => l.id === appConfig.locationId);
+        if (!savedLocValid) {
+            setAppConfig({ locationId: locations[0].id, locationName: locations[0].name });
+        }
+    }, [locations, appConfig, isAuthenticated, user?.role, setAppConfig]);
+
     // ── Determine which screen to show ──
     const renderContent = () => {
         // Loading
@@ -514,10 +550,6 @@ export const App: React.FC = () => {
             ? isAdmin
             : appConfig?.locationId && locations.some(l => l.id === appConfig.locationId);
 
-        if (appConfig?.locationId && locations.length > 0 && !savedLocValid) {
-            setAppConfig({ locationId: undefined as any, locationName: undefined as any });
-        }
-
         if (locations.length > 1 && !savedLocValid) {
             return (
                 <LocationPicker
@@ -532,10 +564,6 @@ export const App: React.FC = () => {
                     }}
                 />
             );
-        }
-
-        if (locations.length === 1 && !savedLocValid) {
-            setAppConfig({ locationId: locations[0].id, locationName: locations[0].name });
         }
 
         // Step 4: Printer setup

@@ -24,8 +24,13 @@ export function initDatabase(): void {
     db.pragma('foreign_keys = ON');
 
     // Check schema version — if outdated, drop all tables and recreate
-    const versionRow = db.prepare("SELECT value FROM catalog_meta WHERE key = 'schema_version'").get() as any;
-    const currentVersion = versionRow ? parseInt(versionRow.value, 10) : 0;
+    let currentVersion = 0;
+    try {
+        const versionRow = db.prepare("SELECT value FROM catalog_meta WHERE key = 'schema_version'").get() as any;
+        currentVersion = versionRow ? parseInt(versionRow.value, 10) : 0;
+    } catch {
+        // Table doesn't exist yet (first run) — will be created below
+    }
 
     if (currentVersion < DB_SCHEMA_VERSION) {
         log.info(`[DB] Schema upgrade ${currentVersion} → ${DB_SCHEMA_VERSION}, rebuilding tables...`);

@@ -391,6 +391,12 @@ export const POSView: React.FC<POSViewProps> = ({ token, serverUrl, locationId, 
 
             let result: any;
 
+            // Validate DINE_IN requires a table
+            if (orderType === 'DINE_IN' && !openOrder && !selectedTable) {
+                setSubmitting(false);
+                return;
+            }
+
             if (orderType === 'DINE_IN' && openOrder) {
                 // Add items to existing open order
                 result = await addItemsToOrder(token, openOrder.id, items);
