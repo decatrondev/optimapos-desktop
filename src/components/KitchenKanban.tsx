@@ -92,14 +92,14 @@ const KanbanCard: React.FC<{
             )}
 
             <div className="kanban-card__items">
-                {order.items.map((item, idx) => {
+                {(order.items || []).map((item, idx) => {
                     const cat = getItemCategory(item);
                     const dimmed = highlightCategories && highlightCategories.size > 0 && cat && !highlightCategories.has(cat);
                     return (
                         <div key={item.id || idx} className={`kanban-card__item ${dimmed ? 'kanban-card__item--dimmed' : ''}`}>
                             <span className="kanban-card__item-qty">{item.quantity}x</span>
                             <span className="kanban-card__item-name">{getItemName(item)}</span>
-                            {item.addons.length > 0 && (
+                            {(item.addons?.length ?? 0) > 0 && (
                                 <div className="kanban-card__addons">
                                     {item.addons.map((a, i) => (
                                         <span key={a.id || i} className="kanban-card__addon">

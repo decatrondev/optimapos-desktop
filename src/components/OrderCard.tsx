@@ -83,16 +83,16 @@ export const OrderCard: React.FC<OrderCardProps> = ({ order, currencySymbol, sto
 
             {/* Items */}
             <div className="order-card__items">
-                {order.items.map((item, idx) => (
+                {(order.items || []).map((item, idx) => (
                     <div key={item.id || idx} className="order-card__item">
                         <div className="order-card__item-main">
                             <span className="order-card__item-qty">{item.quantity}x</span>
                             <span className="order-card__item-name">{getItemName(item, { comboEmoji: true })}</span>
                             {userRole !== 'KITCHEN' && <span className="order-card__item-price">{formatPrice(item.totalPrice, currencySymbol)}</span>}
                         </div>
-                        {item.addons.length > 0 && (
+                        {(item.addons?.length ?? 0) > 0 && (
                             <div className="order-card__addons">
-                                {item.addons.map((addon, aIdx) => (
+                                {(item.addons || []).map((addon, aIdx) => (
                                     <span key={addon.id || aIdx} className="order-card__addon">
                                         + {addon.addon.name} {addon.quantity > 1 ? `x${addon.quantity}` : ''}
                                     </span>

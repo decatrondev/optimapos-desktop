@@ -253,7 +253,7 @@ export const DeliveryView: React.FC<DeliveryViewProps> = ({
                     )}
 
                     <div className="delivery-card__items">
-                        {order.items.map((item, idx) => (
+                        {(order.items || []).map((item, idx) => (
                             <div key={item.id || idx} className="delivery-card__item">
                                 <span className="delivery-card__item-qty">{item.quantity}x</span>
                                 <span className="delivery-card__item-name">
@@ -468,7 +468,7 @@ export const DeliveryView: React.FC<DeliveryViewProps> = ({
 
                 {/* Items */}
                 <div className="delivery-card__items">
-                    {order.items.map((item, idx) => (
+                    {(order.items || []).map((item, idx) => (
                         <div key={item.id || idx} className="delivery-card__item">
                             <span className="delivery-card__item-qty">{item.quantity}x</span>
                             <span className="delivery-card__item-name">
