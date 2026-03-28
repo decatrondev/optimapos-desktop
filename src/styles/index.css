@@ -4813,3 +4813,81 @@ body.compact .kanban__card-item {
   .order-card { padding: 10px; }
   .kanban__card { padding: 10px; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   4K / ULTRAWIDE — larger grids, more columns, better space usage
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Full HD+ (1920px+) */
+@media (min-width: 1920px) {
+  .pos__catalog-grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  }
+  .kanban__columns {
+    gap: 20px;
+    padding: 0 20px;
+  }
+  .kanban__card {
+    padding: 16px;
+  }
+  .order-card {
+    padding: 16px;
+  }
+  .order-card__item {
+    font-size: 0.95rem;
+  }
+}
+
+/* 2K/Ultrawide (2560px+) */
+@media (min-width: 2560px) {
+  .pos__catalog-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+  }
+  .pos__product-name {
+    font-size: 1rem;
+  }
+  .pos__product-price {
+    font-size: 1.1rem;
+  }
+  .kanban__columns {
+    gap: 24px;
+    padding: 0 32px;
+  }
+  .kanban__card {
+    padding: 20px;
+  }
+  .status-bar {
+    padding: 8px 32px;
+  }
+  .view-nav__item {
+    padding: 10px 20px;
+    font-size: 0.95rem;
+  }
+}
+
+/* 4K (3840px+) */
+@media (min-width: 3840px) {
+  .pos__catalog-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+  }
+  .pos__product-card {
+    padding: 16px;
+  }
+  .pos__product-name {
+    font-size: 1.15rem;
+  }
+  .pos__product-price {
+    font-size: 1.25rem;
+  }
+  .order-card {
+    padding: 20px;
+  }
+  .order-card__item {
+    font-size: 1.05rem;
+  }
+  .kanban__card {
+    padding: 24px;
+  }
+}
