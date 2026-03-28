@@ -96,7 +96,9 @@ async function getCachedUserData(): Promise<AuthUser | null> {
                 return user;
             }
         }
-    } catch {}
+    } catch (err) {
+        console.warn('[Auth] Failed to retrieve cached user:', err);
+    }
     return null;
 }
 
@@ -127,7 +129,8 @@ export async function fetchUserLocations(token: string): Promise<Array<{ id: num
         if (!res.ok) return [];
         const data = await res.json();
         return (Array.isArray(data) ? data : data.locations || []).filter((l: any) => l.isActive !== false);
-    } catch {
-        return []; // Will fall back to cached locations in AuthContext
+    } catch (err) {
+        console.warn('[Auth] Failed to fetch locations, using cache:', err);
+        return [];
     }
 }

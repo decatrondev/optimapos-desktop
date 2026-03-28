@@ -80,7 +80,22 @@ export async function syncPendingOrders(config: SyncConfig): Promise<{ synced: n
     let synced = 0;
     let failed = 0;
 
+    const MAX_RETRIES = 10;
+
     for (const order of orders) {
+        // Exponential backoff: skip orders that have been retried recently
+        if (order.retries > 0) {
+            const backoffMs = Math.min(1000 * Math.pow(2, order.retries), 5 * 60 * 1000); // max 5 min
+            const lastRetryAge = Date.now() - new Date(order.createdAt).getTime();
+            if (lastRetryAge < backoffMs) continue;
+        }
+        if (order.retries >= MAX_RETRIES) {
+            log.warn(`[Sync] Order ${order.id} exceeded ${MAX_RETRIES} retries — skipping`);
+            removePendingOrder(order.id);
+            failed++;
+            continue;
+        }
+
         try {
             const res = await fetch(`${config.serverUrl}/api/orders/pos`, {
                 method: 'POST',

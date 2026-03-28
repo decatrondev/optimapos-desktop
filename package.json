@@ -21,7 +21,10 @@
     "dist:linux": "npm run build && electron-builder --linux",
     "dist:all": "npm run build && electron-builder --win --mac --linux",
     "publish": "npm run build && electron-builder --win --mac --linux --publish always",
-    "postinstall": "npx @electron/rebuild -f -w better-sqlite3"
+    "postinstall": "npx @electron/rebuild -f -w better-sqlite3",
+    "lint": "eslint src/ electron/",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\" \"electron/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"electron/**/*.ts\""
   },
   "dependencies": {
     "better-sqlite3": "^12.8.0",
@@ -34,6 +37,7 @@
   },
   "devDependencies": {
     "@electron/rebuild": "^3.7.2",
+    "@eslint/js": "^10.0.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
@@ -42,7 +46,11 @@
     "cross-env": "^7.0.3",
     "electron": "^33.2.1",
     "electron-builder": "^25.1.8",
+    "eslint": "^9.39.4",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.8.1",
     "typescript": "^5.6.3",
+    "typescript-eslint": "^8.57.2",
     "vite": "^6.0.5"
   },
   "build": {

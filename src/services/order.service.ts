@@ -15,7 +15,8 @@ export async function fetchActiveOrders(token: string, locationId?: number): Pro
             if (!res.ok) return [];
             const data = await res.json();
             return (data.data || data.orders || []) as Order[];
-        } catch {
+        } catch (err) {
+            console.warn(`[Orders] Fetch status=${status} failed:`, err);
             return [];
         }
     });
@@ -39,7 +40,8 @@ export async function fetchKitchenOrders(token: string, locationId?: number): Pr
         if (!res.ok) return [];
         const data = await res.json();
         return (Array.isArray(data) ? data : []) as Order[];
-    } catch {
+    } catch (err) {
+        console.warn('[Orders] Kitchen fetch failed:', err);
         return [];
     }
 }
@@ -55,7 +57,8 @@ export async function fetchDeliveryOrders(token: string, locationId?: number): P
         if (!res.ok) return [];
         const data = await res.json();
         return (Array.isArray(data) ? data : []) as Order[];
-    } catch {
+    } catch (err) {
+        console.warn('[Orders] Delivery fetch failed:', err);
         return [];
     }
 }

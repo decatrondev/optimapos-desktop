@@ -42,7 +42,7 @@ export async function fetchAddonGroups(token: string, locationId?: number): Prom
     const serverUrl = await getServerUrl();
     const params = locationId ? `?locationId=${locationId}` : '';
     const res = await fetch(`${serverUrl}/api/addons/groups${params}`, { headers: authHeaders(token) });
-    if (!res.ok) return [];
+    if (!res.ok) { console.warn('[POS] Fetch addon groups failed:', res.status); return []; }
     const data = await res.json();
     return Array.isArray(data) ? data : [];
 }
@@ -62,7 +62,7 @@ export async function fetchTableOpenOrder(token: string, tableId: number): Promi
     const serverUrl = await getServerUrl();
     const res = await fetch(`${serverUrl}/api/orders/table/${tableId}/open`, { headers: authHeaders(token) });
     if (res.status === 404) return null;
-    if (!res.ok) return null;
+    if (!res.ok) { console.warn('[POS] Fetch table open order failed:', res.status); return null; }
     const data = await res.json();
     return data.order || data || null;
 }
@@ -73,7 +73,7 @@ export async function fetchZones(token: string, locationId?: number): Promise<{ 
     const serverUrl = await getServerUrl();
     const params = locationId ? `?locationId=${locationId}` : '';
     const res = await fetch(`${serverUrl}/api/zones${params}`, { headers: authHeaders(token) });
-    if (!res.ok) return { zones: [], basePrice: 0 };
+    if (!res.ok) { console.warn('[POS] Fetch zones failed:', res.status); return { zones: [], basePrice: 0 }; }
     const data = await res.json();
     return {
         zones: (data.zones || []).filter((z: any) => z.isActive),
@@ -95,6 +95,10 @@ export async function validatePromoCode(
         headers: authHeaders(token),
         body: JSON.stringify({ code, orderAmount, locationId }),
     });
+    if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        return { valid: false, error: errData.message || `Error ${res.status}` };
+    }
     return res.json();
 }
 

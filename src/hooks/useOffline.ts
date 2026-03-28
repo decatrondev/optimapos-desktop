@@ -65,7 +65,8 @@ export function useOffline({ serverUrl, token, locationId }: UseOfflineOptions):
                     if (!online && prev === 'reconnecting') return 'offline';
                     return prev;
                 });
-            } catch {
+            } catch (err) {
+                console.warn('[Offline] Connection check failed:', err);
                 setStatus('offline');
             }
         };
@@ -95,11 +96,11 @@ export function useOffline({ serverUrl, token, locationId }: UseOfflineOptions):
                 api.offlineGetLastSync().then(setLastSync);
                 api.offlineHasCatalog().then(setHasCatalog);
             }
-        });
+        }).catch(err => console.warn('[Offline] Catalog sync failed:', err));
         // Auto-sync pending orders
         api.offlineSyncPending(serverUrl, token, locationId).then(() => {
             api.offlineGetPendingCount().then(setPendingCount);
-        });
+        }).catch(err => console.warn('[Offline] Pending sync failed:', err));
     }, [status, api, token, locationId, serverUrl]);
 
     const syncCatalogNow = useCallback(async () => {

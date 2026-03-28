@@ -101,6 +101,7 @@ export async function quickPrint(
 
         return { success: true };
     } catch (err: any) {
+        console.error('[PrintExecutor] Quick print failed:', err);
         return { success: false, error: err.message };
     }
 }
