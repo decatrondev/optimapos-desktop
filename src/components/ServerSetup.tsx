@@ -5,44 +5,44 @@ interface ServerSetupProps {
     onComplete: (serverUrl: string, tenantSlug: string) => void;
 }
 
+const DOMAIN = 'decatron.net';
+
 export const ServerSetup: React.FC<ServerSetupProps> = ({ onComplete }) => {
-    const [url, setUrl] = useState('');
+    const [slug, setSlug] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [validated, setValidated] = useState(false);
+    const [tenantName, setTenantName] = useState('');
+
+    const cleanSlug = (value: string) => {
+        // Only allow lowercase letters, numbers, hyphens
+        return value.toLowerCase().replace(/[^a-z0-9-]/g, '');
+    };
 
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
-        if (!url.trim()) return;
+        const s = slug.trim();
+        if (!s) return;
 
         setLoading(true);
         setError(null);
         setValidated(false);
 
         try {
-            // Normalize URL
-            let serverUrl = url.trim().toLowerCase();
-            if (!serverUrl.startsWith('http')) {
-                serverUrl = `https://${serverUrl}`;
-            }
-            serverUrl = serverUrl.replace(/\/+$/, '');
-
+            const serverUrl = `https://${s}.${DOMAIN}`;
             const result = await validateServer(serverUrl);
 
             if (result.valid) {
                 setValidated(true);
-                // Extract slug from URL (e.g. doncarlyn.decatron.net → doncarlyn)
-                const hostname = new URL(serverUrl).hostname;
-                const slug = hostname.split('.')[0];
-
+                setTenantName(result.name || s);
                 setTimeout(() => {
-                    onComplete(serverUrl, slug);
-                }, 500);
+                    onComplete(serverUrl, s);
+                }, 600);
             } else {
-                setError(result.error || 'No se pudo conectar al servidor');
+                setError('Local no encontrado. Verifica el nombre e intenta de nuevo.');
             }
-        } catch (e: any) {
-            setError('Error de conexión. Verifica la URL.');
+        } catch {
+            setError('Error de conexion. Verifica tu internet.');
         } finally {
             setLoading(false);
         }
@@ -56,9 +56,9 @@ export const ServerSetup: React.FC<ServerSetupProps> = ({ onComplete }) => {
 
             <div className="login-card">
                 <div className="login-card__header">
-                    <span className="login-card__logo">📡</span>
+                    <span className="login-card__logo">⚡</span>
                     <h1 className="login-card__title">OptimaPOS Terminal</h1>
-                    <p className="login-card__subtitle">Configuración Inicial</p>
+                    <p className="login-card__subtitle">Ingresa el nombre de tu local</p>
                 </div>
 
                 <form className="login-card__form" onSubmit={handleSubmit}>
@@ -71,43 +71,43 @@ export const ServerSetup: React.FC<ServerSetupProps> = ({ onComplete }) => {
 
                     {validated && (
                         <div className="login-card__success">
-                            ✅ Servidor conectado correctamente
+                            ✅ {tenantName} conectado
                         </div>
                     )}
 
                     <div className="login-card__field">
-                        <label className="login-card__label" htmlFor="server-url">
-                            URL del Restaurante
+                        <label className="login-card__label" htmlFor="local-name">
+                            Nombre del local
                         </label>
                         <div className="login-card__input-wrap">
-                            <span className="login-card__input-icon">🌐</span>
+                            <span className="login-card__input-icon">🏪</span>
                             <input
-                                id="server-url"
+                                id="local-name"
                                 type="text"
                                 className="login-card__input"
-                                placeholder="mirestaurante.decatron.net"
-                                value={url}
-                                onChange={(e) => { setUrl(e.target.value); setValidated(false); setError(null); }}
+                                placeholder="mirestaurante"
+                                value={slug}
+                                onChange={(e) => { setSlug(cleanSlug(e.target.value)); setValidated(false); setError(null); }}
                                 autoFocus
                                 disabled={loading}
                             />
                         </div>
-                        <p className="login-card__hint">
-                            Ingresa la URL proporcionada por el administrador
+                        <p className="login-card__hint" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span style={{ opacity: 0.5 }}>{slug || 'mirestaurante'}.{DOMAIN}</span>
                         </p>
                     </div>
 
                     <button
                         type="submit"
                         className="login-card__submit"
-                        disabled={loading || !url.trim() || validated}
+                        disabled={loading || !slug.trim() || validated}
                     >
                         {loading ? (
-                            <><span className="login-card__spinner" /> Verificando...</>
+                            <><span className="login-card__spinner" /> Buscando local...</>
                         ) : validated ? (
                             '✅ Conectado'
                         ) : (
-                            '🔗 Conectar'
+                            'Conectar'
                         )}
                     </button>
                 </form>
