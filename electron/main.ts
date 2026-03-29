@@ -91,6 +91,23 @@ const isDev = process.env.NODE_ENV === 'development';
 let mainWindow: BrowserWindow | null = null;
 let kitchenWindow: BrowserWindow | null = null;
 
+// ─── Single Instance Lock ───────────────────────────────────────────────────
+
+const gotLock = app.requestSingleInstanceLock();
+
+if (!gotLock) {
+    // Another instance is already running — quit immediately
+    app.quit();
+} else {
+    app.on('second-instance', () => {
+        // Someone tried to open a second instance — focus the existing window
+        if (mainWindow) {
+            if (mainWindow.isMinimized()) mainWindow.restore();
+            mainWindow.focus();
+        }
+    });
+}
+
 // ─── Logging ────────────────────────────────────────────────────────────────
 
 log.transports.file.level = 'info';
