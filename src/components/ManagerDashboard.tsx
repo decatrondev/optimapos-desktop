@@ -19,8 +19,12 @@ interface ManagerDashboardProps {
     currentView: ActiveView;
 }
 
+function todayLima(): string {
+    return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
+}
+
 async function fetchDashboardStats(token: string, serverUrl: string, locationId?: number): Promise<DashboardStats> {
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayLima();
     const locParam = locationId ? `&locationId=${locationId}` : '';
     try {
         const res = await fetch(`${serverUrl}/api/reports/summary?from=${today}&to=${today}${locParam}`, {
@@ -40,7 +44,7 @@ async function fetchDashboardStats(token: string, serverUrl: string, locationId?
 }
 
 async function fetchTopProducts(token: string, serverUrl: string, locationId?: number): Promise<{ name: string; qty: number }[]> {
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayLima();
     const locParam = locationId ? `&locationId=${locationId}` : '';
     try {
         const res = await fetch(`${serverUrl}/api/reports/top-products?from=${today}&to=${today}&limit=5${locParam}`, {

@@ -1,15 +1,21 @@
 import { Order, OrderStatus } from '../types/order';
 import { getServerUrl } from './api';
 
+/** Get today's date string in Lima timezone (YYYY-MM-DD) */
+function todayLima(): string {
+    return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' });
+}
+
 export async function fetchActiveOrders(token: string, locationId?: number): Promise<Order[]> {
     const serverUrl = await getServerUrl();
     const activeStatuses: OrderStatus[] = ['PENDING', 'CONFIRMED', 'PREPARING', 'ON_THE_WAY', 'READY_PICKUP'];
     const allOrders: Order[] = [];
+    const today = todayLima();
     const locParam = locationId ? `&locationId=${locationId}` : '';
 
     const requests = activeStatuses.map(async (status) => {
         try {
-            const res = await fetch(`${serverUrl}/api/orders?status=${status}${locParam}`, {
+            const res = await fetch(`${serverUrl}/api/orders?status=${status}&from=${today}&to=${today}${locParam}&limit=100`, {
                 headers: { 'Authorization': `Bearer ${token}` },
             });
             if (!res.ok) return [];
