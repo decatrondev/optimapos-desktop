@@ -3,6 +3,7 @@ import { AuthUser, AuthState, AppConfig, Location } from '../types/order';
 import {
     login as loginAPI, persistToken, getPersistedToken, validateToken,
     AuthError, fetchUserLocations,
+    persistRefreshToken, getPersistedRefreshToken, refreshAccessToken,
 } from '../services/auth.service';
 
 export interface Permission {
@@ -86,30 +87,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }
 
                 // Try to restore session
-                const storedToken = await getPersistedToken();
-                if (storedToken) {
-                    const validUser = await validateToken(storedToken);
-                    if (validUser) {
-                        setToken(storedToken);
+                let activeToken = await getPersistedToken();
+                if (activeToken) {
+                    let validUser = await validateToken(activeToken);
+
+                    // Token expired? Try refresh
+                    if (!validUser) {
+                        const rt = await getPersistedRefreshToken();
+                        if (rt) {
+                            const refreshed = await refreshAccessToken(rt);
+                            if (refreshed) {
+                                activeToken = refreshed.token;
+                                await persistToken(activeToken);
+                                await persistRefreshToken(refreshed.refreshToken);
+                                validUser = await validateToken(activeToken);
+                            }
+                        }
+                    }
+
+                    if (validUser && activeToken) {
+                        setToken(activeToken);
                         setUser(validUser);
                         if (validUser.role !== 'ADMIN' && validUser.role !== 'MANAGER') {
-                            const perms = await fetchPermissions(storedToken);
+                            const perms = await fetchPermissions(activeToken);
                             setPermissions(perms);
                         }
-                        // Fetch locations (with offline fallback)
-                        let locs = await fetchUserLocations(storedToken);
+                        let locs = await fetchUserLocations(activeToken);
                         if (locs.length > 0) {
-                            // Cache for offline
                             if (window.electronAPI?.saveConfig) {
                                 await window.electronAPI.saveConfig({ cachedLocations: JSON.stringify(locs) } as any);
                             }
                         } else {
-                            // Try cached locations
                             locs = await getCachedLocations();
                         }
                         setLocations(locs);
                     } else {
                         await persistToken(null);
+                        await persistRefreshToken(null);
                     }
                 }
             } catch (e) {
@@ -145,8 +159,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
             if (rememberMe) {
                 await persistToken(response.token);
+                await persistRefreshToken(response.refreshToken || null);
             } else {
-                await persistToken(null); // Clear any previously saved token
+                await persistToken(null);
+                await persistRefreshToken(null);
             }
 
             if (response.user.role !== 'ADMIN' && response.user.role !== 'MANAGER') {
@@ -169,6 +185,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     }, []);
 
+    // Auto-refresh token every 10 minutes while authenticated
+    useEffect(() => {
+        if (!token) return;
+        const interval = setInterval(async () => {
+            const rt = await getPersistedRefreshToken();
+            if (!rt) return;
+            const refreshed = await refreshAccessToken(rt);
+            if (refreshed) {
+                setToken(refreshed.token);
+                await persistToken(refreshed.token);
+                await persistRefreshToken(refreshed.refreshToken);
+                console.log('[Auth] Token refreshed automatically');
+            }
+        }, 10 * 60 * 1000); // 10 minutes
+        return () => clearInterval(interval);
+    }, [token]);
+
     const logout = useCallback(async () => {
         setUser(null);
         setToken(null);
@@ -176,6 +209,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setPermissions([]);
         setLocations([]);
         await persistToken(null);
+        await persistRefreshToken(null);
     }, []);
 
     const hasPermission = useCallback((module: string, action: 'read' | 'write'): boolean => {

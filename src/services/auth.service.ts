@@ -56,6 +56,44 @@ export async function getPersistedToken(): Promise<string | null> {
     return localStorage.getItem('op_token');
 }
 
+export async function persistRefreshToken(rt: string | null): Promise<void> {
+    if (window.electronAPI?.saveConfig) {
+        await window.electronAPI.saveConfig({ refreshToken: rt || '' } as any);
+    } else {
+        if (rt) localStorage.setItem('op_refresh_token', rt);
+        else localStorage.removeItem('op_refresh_token');
+    }
+}
+
+export async function getPersistedRefreshToken(): Promise<string | null> {
+    try {
+        if (window.electronAPI?.getConfig) {
+            const config: any = await window.electronAPI.getConfig();
+            return config.refreshToken || null;
+        }
+        return localStorage.getItem('op_refresh_token');
+    } catch { return null; }
+}
+
+/** Refresh access token using refresh token */
+export async function refreshAccessToken(refreshToken: string): Promise<{ token: string; refreshToken: string } | null> {
+    try {
+        const serverUrl = await getServerUrl();
+        if (!serverUrl) return null;
+        const res = await fetch(`${serverUrl}/api/auth/refresh`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refreshToken }),
+            signal: AbortSignal.timeout(5000),
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        return { token: data.token, refreshToken: data.refreshToken };
+    } catch {
+        return null;
+    }
+}
+
 export async function validateToken(token: string): Promise<AuthUser | null> {
     try {
         const serverUrl = await getServerUrl();
