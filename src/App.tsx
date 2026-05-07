@@ -18,7 +18,7 @@ import { PrintQueue, PrintHistoryEntry } from './components/PrintQueue';
 import { ServerSetup } from './components/ServerSetup';
 import { LocationPicker } from './components/LocationPicker';
 import { Order, Location } from './types/order';
-import { PrintRule, TicketTemplate, PrintJob } from './types/printer-config';
+import { TicketTemplate, PrintJob } from './types/printer-config';
 import {
     updateOrderStatus, getNextStatus, fetchActiveOrders,
     fetchKitchenOrders, fetchDeliveryOrders,
@@ -28,7 +28,7 @@ import {
 import { printTicket } from './services/printer.service';
 import { socketService } from './services/socket.service';
 import {
-    fetchRules, fetchTemplate, fetchDefaultTemplate, fetchDesktopConfig, matchRulesForOrder,
+    fetchTemplate, fetchDefaultTemplate, fetchDesktopConfig,
     getStoredPrinterId, fetchPrinters,
 } from './services/printer-config.service';
 import { executePrintJob, quickPrint } from './services/print-executor';
@@ -84,7 +84,7 @@ const OperationalView: React.FC<{
     const { orders, isConnected, hasNewAlert, printJobs, dismissAlert, updateOrderLocally, removeOrder, clearPrintJob } = useSocket(serverUrl, token, socketLocId, userRole as any, user?.id);
     const offline = useOffline({ serverUrl, token, locationId: socketLocId ?? null });
     const [initialOrders, setInitialOrders] = useState<Order[]>([]);
-    const [rules, setRules] = useState<PrintRule[]>([]);
+    const [allPrinters, setAllPrinters] = useState<import('./types/printer-config').Printer[]>([]);
     const [templateCache, setTemplateCache] = useState<Map<number, TicketTemplate>>(new Map());
     const [printerConfig, setPrinterConfig] = useState<import('./types/printer-config').Printer | null>(null);
     const [ticketPreview, setTicketPreview] = useState<{ order: Order; template: TicketTemplate } | null>(null);
@@ -141,59 +141,47 @@ const OperationalView: React.FC<{
             loadOrders();
         }
 
-        // Poll every 30s as fallback — ensures data stays fresh even if socket misses events
         const pollInterval = token ? setInterval(loadOrders, 30_000) : null;
 
-        // Load print rules for roles that have printer_config access (not KITCHEN/DELIVERY)
+        // Load printers config (with templates embedded)
         if (userRole !== 'KITCHEN' && userRole !== 'DELIVERY') {
             const locId = appConfig?.locationId && appConfig.locationId > 0 ? appConfig.locationId : undefined;
 
-            if (token) {
-                // Primary: use JWT endpoints
-                fetchRules(token).then(r => {
-                    console.log(`[PrintConfig] Loaded ${r.length} rules`);
-                    setRules(r);
-                }).catch(e => console.error('[PrintConfig] Load failed:', e));
+            const loadPrinterConfig = (printers: any[]) => {
+                const active = printers.filter((p: any) => p.isActive);
+                setAllPrinters(active as any);
+                // Cache templates from printers
+                const cache = new Map<number, TicketTemplate>();
+                for (const p of active) {
+                    if (p.template && p.templateId) cache.set(p.templateId, p.template as TicketTemplate);
+                }
+                setTemplateCache(cache);
+                // Set selected printer
+                const myPrinter = active.find((p: any) => p.id === printerId) || active.find((p: any) => p.isDefault) || null;
+                if (myPrinter) {
+                    console.log(`[PrintConfig] Active printer: "${myPrinter.name}" (${myPrinter.type} ${myPrinter.address})`);
+                    setPrinterConfig(myPrinter as any);
+                }
+                console.log(`[PrintConfig] Loaded ${active.length} printers, ${cache.size} templates cached`);
+            };
 
-                fetchPrinters(token, locId).then(printers => {
-                    const myPrinter = printers.find(p => p.id === printerId) || printers.find(p => p.isDefault) || null;
-                    if (myPrinter) {
-                        console.log(`[PrintConfig] Active printer: "${myPrinter.name}" (${myPrinter.type} ${myPrinter.address})`);
-                        setPrinterConfig(myPrinter);
-                    }
-                }).catch(e => console.error('[PrintConfig] Printers load failed:', e));
-            } else if (appConfig?.apiKey && appConfig?.tenantSlug) {
-                // Fallback: use desktop config endpoint (API key, no JWT needed)
+            if (appConfig?.apiKey && appConfig?.tenantSlug) {
+                // Preferred: desktop config endpoint (API key, works without JWT)
                 fetchDesktopConfig(appConfig.apiKey, appConfig.tenantSlug, locId).then(config => {
-                    if (config.rules) {
-                        const activeRules = config.rules.filter((r: any) => r.isActive).map((r: any) => ({
-                            id: r.id, name: r.name, events: r.events, orderTypes: r.orderTypes || [],
-                            copies: r.copies, autoPrint: r.autoPrint, isActive: r.isActive,
-                            printerId: r.printerId, templateId: r.templateId,
-                            printerName: r.printerName || '', printerType: r.printerType || 'NETWORK',
-                            printerAddress: r.printerAddress || '', printerPort: r.printerPort || 9100,
-                            template: r.template || null,
-                        })) as PrintRule[];
-                        console.log(`[PrintConfig] Loaded ${activeRules.length} rules (via desktop config)`);
-                        setRules(activeRules);
-                        // Cache templates from rules
-                        const cache = new Map<number, TicketTemplate>();
-                        for (const r of config.rules) {
-                            if (r.template) cache.set(r.templateId, r.template as TicketTemplate);
-                        }
-                        if (config.templates) {
+                    if (config.printers) loadPrinterConfig(config.printers);
+                    // Also cache standalone templates
+                    if (config.templates) {
+                        setTemplateCache(prev => {
+                            const cache = new Map(prev);
                             for (const t of config.templates) cache.set(t.id, t as TicketTemplate);
-                        }
-                        setTemplateCache(cache);
-                    }
-                    if (config.printers) {
-                        const myPrinter = config.printers.find((p: any) => p.id === printerId) || config.printers.find((p: any) => p.isDefault) || null;
-                        if (myPrinter) {
-                            console.log(`[PrintConfig] Active printer: "${myPrinter.name}" (${myPrinter.type} ${myPrinter.address}) (via desktop config)`);
-                            setPrinterConfig(myPrinter as any);
-                        }
+                            return cache;
+                        });
                     }
                 }).catch(e => console.error('[PrintConfig] Desktop config load failed:', e));
+            } else if (token) {
+                // Fallback: JWT endpoint
+                fetchPrinters(token, locId).then(loadPrinterConfig)
+                    .catch(e => console.error('[PrintConfig] Printers load failed:', e));
             }
         }
 
@@ -280,47 +268,40 @@ const OperationalView: React.FC<{
     }, [removeOrder]);
 
     const handlePrintTicket = useCallback(async (order: Order) => {
-        // Try React state token first, then fall back to persisted Electron token
-        let activeToken = token;
-        if (!activeToken && window.electronAPI?.getToken) {
-            activeToken = await window.electronAPI.getToken();
-        }
-
         try {
-            const matchedRules = matchRulesForOrder(rules, printerId, order);
-            if (matchedRules.length > 0) {
-                const rule = matchedRules[0];
-                // Try cached template first, then fetch
-                let template = templateCache.get(rule.templateId);
-                if (!template && activeToken) {
-                    template = await fetchTemplate(activeToken, rule.templateId);
-                }
-                if (template) {
+            // Find printers with templates assigned
+            const printersWithTemplates = allPrinters.filter(p => p.templateId && p.template);
+
+            if (printersWithTemplates.length === 0) {
+                // No printer has a template — try fetching default from backend
+                let activeToken = token;
+                if (!activeToken && window.electronAPI?.getToken) activeToken = await window.electronAPI.getToken();
+                if (activeToken) {
+                    const template = await fetchDefaultTemplate(activeToken);
                     setTicketPreview({ order, template });
                     return;
                 }
-            }
-
-            // No rules or no template found — try default template
-            if (activeToken) {
-                const template = await fetchDefaultTemplate(activeToken);
-                setTicketPreview({ order, template });
+                // Last resort: cached template
+                const cached = templateCache.values().next().value;
+                if (cached) { setTicketPreview({ order, template: cached }); return; }
+                await printTicket(order, storeName, CURRENCY_SYMBOL);
                 return;
             }
 
-            // Try first cached template as last resort
-            const firstTemplate = templateCache.values().next().value;
-            if (firstTemplate) {
-                setTicketPreview({ order, template: firstTemplate });
-                return;
-            }
+            // Use the selected printer's template, or default printer, or first available
+            const selectedPrinter = printersWithTemplates.find(p => p.id === printerId)
+                || printersWithTemplates.find(p => p.isDefault)
+                || printersWithTemplates[0];
 
-            // Nothing available — fallback to plain text
-            await printTicket(order, storeName, CURRENCY_SYMBOL);
+            if (selectedPrinter?.template) {
+                setTicketPreview({ order, template: selectedPrinter.template });
+            } else {
+                await printTicket(order, storeName, CURRENCY_SYMBOL);
+            }
         } catch {
             await printTicket(order, storeName, CURRENCY_SYMBOL);
         }
-    }, [token, rules, printerId, storeName, templateCache]);
+    }, [token, allPrinters, printerId, storeName, templateCache]);
 
     const handleTicketPrint = useCallback(async () => {
         if (!ticketPreview) return;

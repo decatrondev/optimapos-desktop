@@ -10,6 +10,13 @@ export interface Printer {
     isDefault: boolean;
     locationId: number | null;
     locationName: string | null;
+    // Print config (merged from old PrintRule)
+    templateId: number | null;
+    template: TicketTemplate | null;
+    events: string[];
+    orderTypes: string[];
+    copies: number;
+    autoPrint: boolean;
 }
 
 export interface PrintRule {
