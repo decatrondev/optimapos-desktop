@@ -177,26 +177,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 await window.electronAPI.saveConfig({ cachedLocations: JSON.stringify(locs) } as any);
             }
 
-            // Fetch desktop API key for ADMIN/MANAGER (auto-generates if needed)
-            if (response.user.role === 'ADMIN' || response.user.role === 'MANAGER') {
-                try {
-                    const config = await window.electronAPI?.getConfig?.();
-                    const serverUrl = config?.serverUrl || '';
-                    if (serverUrl) {
-                        const keyRes = await fetch(`${serverUrl}/api/v1/desktop/key/full`, {
-                            headers: { 'Authorization': `Bearer ${response.token}` },
-                        });
-                        if (keyRes.ok) {
-                            const { apiKey } = await keyRes.json();
-                            if (apiKey && window.electronAPI?.saveConfig) {
-                                await window.electronAPI.saveConfig({ apiKey } as any);
-                                console.log('[Auth] Desktop API key saved');
-                            }
+            // Fetch desktop API key (auto-generates if needed)
+            try {
+                const config = await window.electronAPI?.getConfig?.();
+                const serverUrl = config?.serverUrl || '';
+                if (serverUrl && !config?.apiKey) {
+                    const keyRes = await fetch(`${serverUrl}/api/v1/desktop/key/full`, {
+                        headers: { 'Authorization': `Bearer ${response.token}` },
+                    });
+                    if (keyRes.ok) {
+                        const { apiKey } = await keyRes.json();
+                        if (apiKey && window.electronAPI?.saveConfig) {
+                            await window.electronAPI.saveConfig({ apiKey } as any);
+                            console.log('[Auth] Desktop API key saved');
                         }
                     }
-                } catch (e) {
-                    console.warn('[Auth] Could not fetch desktop API key:', e);
                 }
+            } catch (e) {
+                console.warn('[Auth] Could not fetch desktop API key:', e);
             }
         } catch (e) {
             const message = e instanceof AuthError ? e.message : 'Error de conexión. Verifica tu red.';

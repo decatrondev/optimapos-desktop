@@ -91,13 +91,9 @@ export function useSocket(socketUrl: string, token?: string | null, locationId?:
 
             // KITCHEN role: only process kitchen-related print events
             if (userRole === 'KITCHEN') {
-                const kitchenEvents = ['kitchen_status_change', 'new_order'];
+                const kitchenEvents = ['ORDER_CREATED', 'ITEMS_ADDED', 'ITEM_CANCELLED', 'ORDER_MODIFIED', 'TABLE_CHANGED'];
                 if (!kitchenEvents.includes(job.event)) return;
             }
-
-            // Skip print if I created this order (VENDOR creating from POS)
-            const jobVendorId = job.data?.order?.vendorId ?? job.data?.vendorId;
-            if (userId && jobVendorId === userId && ['ORDER_CREATED', 'DELIVERY_TICKET'].includes(job.event)) return;
 
             console.log(`[PrintJob] Received: ${job.jobId} | ${job.event} | printer: ${job.printer.name}`);
             setPrintJobs(prev => [...prev, job]);
