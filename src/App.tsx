@@ -210,7 +210,13 @@ const OperationalView: React.FC<{
 
     const handleAdvanceStatus = useCallback(async (orderId: number, orderType: string) => {
         const order = mergedOrders.find(o => o.id === orderId);
-        if (!order || !token) return;
+        if (!order) return;
+        // Try React state token first, then fall back to persisted Electron token
+        let activeToken = token;
+        if (!activeToken && window.electronAPI?.getToken) {
+            activeToken = await window.electronAPI.getToken();
+        }
+        if (!activeToken) return;
         const nextStatus = getNextStatus(order.status, orderType, userRole);
         if (!nextStatus) return;
 
@@ -219,12 +225,12 @@ const OperationalView: React.FC<{
             // Kitchen maps order status to kitchen status
             const kitchenStatus = nextStatus === 'PREPARING' ? 'PREPARING' : nextStatus === 'READY_PICKUP' ? 'READY' : null;
             if (kitchenStatus) {
-                await updateKitchenOrderStatus(orderId, kitchenStatus, token);
+                await updateKitchenOrderStatus(orderId, kitchenStatus, activeToken);
             }
         } else if (userRole === 'DELIVERY') {
-            await updateDeliveryOrderStatus(orderId, nextStatus, token);
+            await updateDeliveryOrderStatus(orderId, nextStatus, activeToken);
         } else {
-            await updateOrderStatus(orderId, nextStatus, token);
+            await updateOrderStatus(orderId, nextStatus, activeToken);
         }
 
         updateOrderLocally(orderId, nextStatus);
@@ -237,7 +243,11 @@ const OperationalView: React.FC<{
     }, [removeOrder]);
 
     const handlePrintTicket = useCallback(async (order: Order) => {
-        if (!token) return;
+        // Try React state token first, then fall back to persisted Electron token
+        let activeToken = token;
+        if (!activeToken && window.electronAPI?.getToken) {
+            activeToken = await window.electronAPI.getToken();
+        }
 
         const matchedRules = matchRulesForOrder(rules, printerId, order);
         if (matchedRules.length === 0) {
@@ -247,9 +257,11 @@ const OperationalView: React.FC<{
 
         const rule = matchedRules[0];
         try {
-            const template = await fetchTemplate(token, rule.templateId);
+            if (!activeToken) throw new Error('No token');
+            const template = await fetchTemplate(activeToken, rule.templateId);
             setTicketPreview({ order, template });
         } catch {
+            // Fallback to plain text ticket (always works, no token needed)
             await printTicket(order, storeName, CURRENCY_SYMBOL);
         }
     }, [token, rules, printerId, storeName]);
