@@ -28,7 +28,7 @@ import {
 import { printTicket } from './services/printer.service';
 import { socketService } from './services/socket.service';
 import {
-    fetchRules, fetchTemplate, matchRulesForOrder,
+    fetchRules, fetchTemplate, fetchDefaultTemplate, matchRulesForOrder,
     getStoredPrinterId, fetchPrinters,
 } from './services/printer-config.service';
 import { executePrintJob, quickPrint } from './services/print-executor';
@@ -249,19 +249,23 @@ const OperationalView: React.FC<{
             activeToken = await window.electronAPI.getToken();
         }
 
-        const matchedRules = matchRulesForOrder(rules, printerId, order);
-        if (matchedRules.length === 0) {
-            await printTicket(order, storeName, CURRENCY_SYMBOL);
-            return;
-        }
-
-        const rule = matchedRules[0];
         try {
-            if (!activeToken) throw new Error('No token');
-            const template = await fetchTemplate(activeToken, rule.templateId);
-            setTicketPreview({ order, template });
+            const matchedRules = matchRulesForOrder(rules, printerId, order);
+            if (matchedRules.length > 0) {
+                // Has rules — fetch the rule's template
+                if (!activeToken) throw new Error('No token');
+                const template = await fetchTemplate(activeToken, matchedRules[0].templateId);
+                setTicketPreview({ order, template });
+            } else if (activeToken) {
+                // No rules — fetch default template and show preview
+                const template = await fetchDefaultTemplate(activeToken);
+                setTicketPreview({ order, template });
+            } else {
+                // No token at all — fallback to plain text
+                await printTicket(order, storeName, CURRENCY_SYMBOL);
+            }
         } catch {
-            // Fallback to plain text ticket (always works, no token needed)
+            // Any error — fallback to plain text ticket
             await printTicket(order, storeName, CURRENCY_SYMBOL);
         }
     }, [token, rules, printerId, storeName]);

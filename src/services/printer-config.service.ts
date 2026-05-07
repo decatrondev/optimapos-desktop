@@ -47,6 +47,15 @@ export async function fetchTemplate(token: string, templateId: number): Promise<
     return res.json();
 }
 
+export async function fetchDefaultTemplate(token: string): Promise<TicketTemplate> {
+    const serverUrl = await getServerUrl();
+    const res = await fetch(`${serverUrl}/api/config/ticket-template`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error(`Error ${res.status}`);
+    return res.json();
+}
+
 // ─── Rule Matching ───────────────────────────────────────────────────────────
 
 export function matchRulesForEvent(
