@@ -39,7 +39,7 @@ function fmt(v: any): string {
 }
 
 function cartItemTotal(item: CartItem): number {
-    const addonTotal = item.addons.reduce((s, a) => s + num(a.price) * a.quantity, 0);
+    const addonTotal = (item.addons || []).reduce((s, a) => s + num(a.price) * a.quantity, 0);
     return (num(item.basePrice) + addonTotal) * item.quantity;
 }
 
@@ -386,7 +386,7 @@ export const POSView: React.FC<POSViewProps> = ({ token, serverUrl, locationId, 
                 variantId: c.variantId,
                 quantity: c.quantity,
                 notes: c.notes || undefined,
-                addons: c.addons.length > 0 ? c.addons.map(a => ({ addonId: a.addonId, quantity: a.quantity })) : undefined,
+                addons: c.addons?.length > 0 ? c.addons.map(a => ({ addonId: a.addonId, quantity: a.quantity })) : undefined,
             }));
 
             let result: any;
@@ -465,7 +465,7 @@ export const POSView: React.FC<POSViewProps> = ({ token, serverUrl, locationId, 
                         variantId: c.variantId,
                         quantity: c.quantity,
                         notes: c.notes || undefined,
-                        addons: c.addons.length > 0 ? c.addons.map(a => ({ addonId: a.addonId, quantity: a.quantity })) : undefined,
+                        addons: c.addons?.length > 0 ? c.addons.map(a => ({ addonId: a.addonId, quantity: a.quantity })) : undefined,
                     })),
                 };
                 const saveResult = await saveOffline(offlineId, payload);
@@ -498,7 +498,7 @@ export const POSView: React.FC<POSViewProps> = ({ token, serverUrl, locationId, 
                     variantId: c.variantId,
                     quantity: c.quantity,
                     notes: c.notes || undefined,
-                    addons: c.addons.length > 0 ? c.addons.map(a => ({ addonId: a.addonId, quantity: a.quantity })) : undefined,
+                    addons: c.addons?.length > 0 ? c.addons.map(a => ({ addonId: a.addonId, quantity: a.quantity })) : undefined,
                 }));
                 await addItemsToOrder(token, openOrder.id, items);
             }
@@ -749,9 +749,9 @@ export const POSView: React.FC<POSViewProps> = ({ token, serverUrl, locationId, 
                                 </div>
                                 <div className="pos__item-price">{CURRENCY}{cartItemTotal(item).toFixed(2)}</div>
                             </div>
-                            {item.addons.length > 0 && (
+                            {(item.addons?.length ?? 0) > 0 && (
                                 <div className="pos__item-addons">
-                                    {item.addons.map(a => (
+                                    {(item.addons || []).map(a => (
                                         <span key={a.addonId} className="pos__item-addon">
                                             + {a.name}{a.quantity > 1 ? ` x${a.quantity}` : ''}
                                         </span>

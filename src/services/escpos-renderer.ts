@@ -161,8 +161,8 @@ function renderItemsList(
             lines.push(qtyStr);
         }
 
-        if (showAddons && item.addons.length > 0) {
-            for (const addon of item.addons) {
+        if (showAddons && (item.addons?.length ?? 0) > 0) {
+            for (const addon of (item.addons || [])) {
                 let addonText = `  + ${addon.addon.name}`;
                 if (addon.quantity > 1) addonText += ` x${addon.quantity}`;
                 if (showPrices) {

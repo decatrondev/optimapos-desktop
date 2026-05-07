@@ -71,7 +71,7 @@ export function formatTicket(order: Order, storeName: string, currencySymbol: st
         lines.push(`${' '.repeat(LINE_WIDTH - price.length - 2)}  ${price}`);
 
         // Addons
-        for (const addon of item.addons) {
+        for (const addon of (item.addons || [])) {
             const addonPrice = formatPrice(addon.price, currencySymbol);
             lines.push(`     + ${addon.addon.name} x${addon.quantity}`);
             lines.push(`${' '.repeat(LINE_WIDTH - addonPrice.length - 2)}  ${addonPrice}`);
