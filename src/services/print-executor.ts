@@ -16,20 +16,37 @@ export interface PrintResult {
     jobId: string;
 }
 
+const MAX_RETRIES = 2;
+const RETRY_DELAY = 1500; // ms
+
 /**
- * Send raw bytes to a printer via TCP or USB.
+ * Send raw bytes to a printer via TCP or USB, with silent auto-retry.
  */
 async function sendToPrinter(
     api: NonNullable<typeof window.electronAPI>,
     printer: { type: string; address: string; port?: number },
     data: number[]
 ): Promise<{ success: boolean; error?: string }> {
-    if (printer.type === 'NETWORK') {
-        return api.printerPrintTCP(printer.address, printer.port || 9100, data);
-    } else if (printer.type === 'USB') {
-        return api.printerPrintUSB(printer.address, data);
+    let lastError = '';
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        let result: { success: boolean; error?: string };
+        if (printer.type === 'NETWORK') {
+            result = await api.printerPrintTCP(printer.address, printer.port || 9100, data);
+        } else if (printer.type === 'USB') {
+            result = await api.printerPrintUSB(printer.address, data);
+        } else {
+            return { success: false, error: `Tipo no soportado: ${printer.type}` };
+        }
+
+        if (result.success) return result;
+
+        lastError = result.error || 'Error desconocido';
+        if (attempt < MAX_RETRIES) {
+            console.warn(`[PrintExecutor] Attempt ${attempt + 1} failed (${lastError}), retrying in ${RETRY_DELAY}ms...`);
+            await new Promise(r => setTimeout(r, RETRY_DELAY));
+        }
     }
-    return { success: false, error: `Tipo no soportado: ${printer.type}` };
+    return { success: false, error: lastError };
 }
 
 /**
