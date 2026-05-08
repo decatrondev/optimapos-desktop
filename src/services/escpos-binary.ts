@@ -450,6 +450,7 @@ function renderItemsList(
     const bytes: number[] = [...applyStyle(el)];
     const showPrices = (el as any).showPrices !== false;
     const showAddons = (el as any).showAddons !== false;
+    const showNotes = (el as any).showNotes !== false;
 
     for (const item of order.items) {
         const name = getItemName(item);
@@ -478,7 +479,7 @@ function renderItemsList(
             }
         }
 
-        if (item.notes) {
+        if (showNotes && item.notes) {
             const wrapped = wrapText('  >> ' + item.notes, ew);
             for (const wl of wrapped) bytes.push(...line(wl));
         }

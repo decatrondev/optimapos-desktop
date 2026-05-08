@@ -175,6 +175,7 @@ const TicketElement: React.FC<{
         case 'items_list': {
             const showPrices = (el as any).showPrices !== false;
             const showAddons = (el as any).showAddons !== false;
+            const showNotes = (el as any).showNotes !== false;
             return (
                 <div style={{ width: '100%', textAlign: 'left', fontFamily: '"Courier New", monospace', fontSize: style.fontSize, lineHeight: style.lineHeight }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', borderBottom: '1px solid #000', paddingBottom: '2px', marginBottom: '2px' }}>
@@ -192,7 +193,7 @@ const TicketElement: React.FC<{
                                     + {addon.name || addon.addon?.name}{addon.quantity > 1 ? ` x${addon.quantity}` : ''}{showPrices ? ` ${formatPrice(addon.price, currencySymbol)}` : ''}
                                 </div>
                             ))}
-                            {item.notes && <div style={{ paddingLeft: '16px', opacity: 0.7, fontStyle: 'italic', fontSize: '0.9em' }}>📝 {item.notes}</div>}
+                            {showNotes && item.notes && <div style={{ paddingLeft: '16px', opacity: 0.7, fontStyle: 'italic', fontSize: '0.9em' }}>📝 {item.notes}</div>}
                         </React.Fragment>
                     ))}
                     {items.length === 0 && <div style={{ color: '#999', fontStyle: 'italic' }}>Sin items</div>}
